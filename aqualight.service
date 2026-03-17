@@ -1,0 +1,15 @@
+[Unit]
+Description=AquaLight Aquarium Schedule Editor
+After=network.target
+
+[Service]
+Type=simple
+User=rcampbell
+WorkingDirectory=/var/www/aqualight
+ExecStart=/usr/bin/python3 /var/www/aqualight/backend/app.py
+Restart=always
+RestartSec=5
+EnvironmentFile=-/var/www/aqualight/.env
+
+[Install]
+WantedBy=multi-user.target

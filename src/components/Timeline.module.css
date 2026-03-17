@@ -1,0 +1,209 @@
+.timeline {
+  width: 100%;
+  padding: 0.5rem 0 0.5rem;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  gap: 1.4rem;
+  margin-bottom: 10px;
+  margin-left: 2px;
+  align-items: center;
+}
+
+.legendWrgb,
+.legendSpot,
+.legendOverlap {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendWrgb { color: #4dd4f8; }
+.legendWrgb::before {
+  content: '';
+  display: inline-block;
+  width: 18px; height: 2px;
+  background: #4dd4f8;
+  border-radius: 1px;
+}
+
+.legendSpot { color: #f0b840; }
+.legendSpot::before {
+  content: '';
+  display: inline-block;
+  width: 18px; height: 2px;
+  background: #f0b840;
+  border-radius: 1px;
+}
+
+.legendOverlap { color: #ffd280; }
+.legendOverlap::before {
+  content: '';
+  display: inline-block;
+  width: 12px; height: 10px;
+  background: rgba(255, 175, 40, 0.35);
+  border: 1px solid rgba(255, 210, 80, 0.6);
+  border-radius: 2px;
+}
+
+/* Main SVG container */
+.svgWrap {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  background: var(--color-track);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Depth vignette — fades edges, adds monitor feel */
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 50% 100%, transparent 55%, rgba(5, 8, 16, 0.55) 100%);
+  box-shadow:
+    inset 0 0 24px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* HTML overlay: icons, handles, tooltip */
+.overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+/* Sun / moon icons */
+.sunIcon,
+.moonIcon {
+  position: absolute;
+  bottom: 6px;
+  transform: translateX(-50%);
+  font-size: 14px;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sunIcon {
+  filter: drop-shadow(0 0 5px rgba(255, 210, 60, 0.9));
+}
+
+.moonIcon {
+  filter: drop-shadow(0 0 5px rgba(140, 170, 255, 0.9));
+}
+
+/* Drag handles — invisible hit area, visible on hover */
+.dragHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.dragHandle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 10%;
+  bottom: 10%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 1px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.dragHandle:hover::after {
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.45);
+}
+
+/* Animated current-time line */
+@keyframes nowPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.nowLine {
+  animation: nowPulse 1.8s ease-in-out infinite;
+}
+
+/* Hover tooltip */
+.tooltip {
+  position: absolute;
+  top: 8px;
+  background: rgba(8, 12, 22, 0.93);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 6px 9px;
+  pointer-events: none;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  min-width: 96px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.tooltipTime {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #c8d8e8;
+  margin-bottom: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltipRow {
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+/* Hour axis */
+.hourAxis {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  margin-top: 4px;
+}
+
+.hourTick {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hourTick::before {
+  content: '';
+  display: block;
+  width: 1px;
+  height: 5px;
+  background: var(--color-border);
+  margin-bottom: 2px;
+}
+
+.hourTick span {
+  font-size: 0.65rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+}

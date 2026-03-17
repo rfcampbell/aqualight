@@ -1,0 +1,148 @@
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.heading {
+  margin: 0 0 1.1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-accent);
+}
+
+.inputs {
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.label {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.numberInput {
+  width: 80px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  padding: 4px 6px;
+  text-align: right;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.results {
+  background: var(--color-bg);
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  padding: 0.75rem;
+}
+
+.result {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.resultLabel {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.resultVal {
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.resultUnit {
+  font-size: 0.7rem;
+  color: var(--color-muted);
+}
+
+.totalRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.totalLabel {
+  font-size: 0.75rem;
+  color: var(--color-text);
+  font-weight: 600;
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.totalVal {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.qualityBadge {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.qualityLow {
+  color: #e74c3c;
+}
+
+.qualityMedium {
+  color: #f39c12;
+}
+
+.qualityHigh {
+  color: #27ae60;
+}
+
+.qualityBadge.qualityLow {
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.qualityBadge.qualityMedium {
+  background: rgba(243, 156, 18, 0.15);
+  border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+.qualityBadge.qualityHigh {
+  background: rgba(39, 174, 96, 0.15);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+}
+
+.legend {
+  font-size: 0.65rem;
+  color: var(--color-muted);
+  margin-top: 0.5rem;
+}

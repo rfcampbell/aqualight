@@ -1,0 +1,133 @@
+/* AquaLight — dark aquarium theme */
+
+:root {
+  --color-bg: #0a0d14;
+  --color-surface: #101520;
+  --color-border: #1e2635;
+  --color-text: #d0dae8;
+  --color-text-secondary: #8a99b0;
+  --color-muted: #4a5568;
+  --color-accent: #1a8a9a;
+  --color-accent-glow: rgba(26, 138, 154, 0.4);
+  --color-track: #0d1320;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Header */
+.app-header {
+  background: linear-gradient(180deg, #0d1624 0%, var(--color-bg) 100%);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 1.5rem;
+}
+
+.app-header-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-logo-icon {
+  font-size: 1.4rem;
+  color: var(--color-accent);
+  text-shadow: 0 0 12px var(--color-accent-glow);
+  line-height: 1;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  margin-left: 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--color-border);
+}
+
+/* Main layout */
+.app-main {
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.section {
+  width: 100%;
+}
+
+.timeline-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem 1rem;
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.col-left,
+.col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.spacer {
+  height: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}
