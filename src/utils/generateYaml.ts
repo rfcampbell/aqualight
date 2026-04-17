@@ -1,4 +1,4 @@
-import type { ScheduleState } from '../types'
+import type { ScheduleState, NanoScheduleState } from '../types'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -210,4 +210,76 @@ export function generateYaml(state: ScheduleState): string {
   ].join('\n')
 
   return header + autos.map(fmtAuto).join('\n\n') + '\n'
+}
+
+// ── Nano (Chihiros WRGB II Pro) ramp generator ───────────────────────────────
+
+const NANO_TOPIC = 'chihiros/nano/light/set'
+
+function nanoAuto(id: string, alias: string, desc: string, at: number, r: number, g: number, b: number, w: number): string {
+  return [
+    `- id: '${id}'`,
+    `  alias: '${alias}'`,
+    `  description: '${desc}'`,
+    `  mode: single`,
+    `  trigger:`,
+    `    - platform: time`,
+    `      at: '${toTime(at)}'`,
+    `  action:`,
+    `    - service: mqtt.publish`,
+    `      data:`,
+    `        topic: ${NANO_TOPIC}`,
+    `        payload: '{"state":"ON","red":${r},"green":${g},"blue":${b},"white":${w}}'`,
+  ].join('\n')
+}
+
+export function generateNanoYaml(state: NanoScheduleState): string {
+  const { rampUpStart, peakStart, peakEnd, rampDownEnd, peakRgbw, stepMinutes } = state
+  const { r, g, b, w } = peakRgbw
+  const step = Math.max(1, stepMinutes)
+  const autos: string[] = []
+
+  // Ramp up: rampUpStart → peakStart
+  const upSteps = Math.round((peakStart - rampUpStart) / step)
+  for (let i = 0; i <= upSteps; i++) {
+    const t    = rampUpStart + i * step
+    const frac = upSteps > 0 ? i / upSteps : 1
+    const rv = clamp(r * frac), gv = clamp(g * frac), bv = clamp(b * frac), wv = clamp(w * frac)
+    autos.push(nanoAuto(
+      `nano_ramp_up_${pad(t / 60)}${pad(t % 60)}`,
+      `Nano — Ramp Up ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
+      `RGBW ${rv},${gv},${bv},${wv}`,
+      t, rv, gv, bv, wv,
+    ))
+  }
+
+  // Ramp down: peakEnd → rampDownEnd  (skip first step if same time as ramp-up last step)
+  const downSteps = Math.round((rampDownEnd - peakEnd) / step)
+  for (let i = 0; i <= downSteps; i++) {
+    const t    = peakEnd + i * step
+    if (t === peakStart) continue
+    const frac = downSteps > 0 ? 1 - i / downSteps : 0
+    const rv = clamp(r * frac), gv = clamp(g * frac), bv = clamp(b * frac), wv = clamp(w * frac)
+    autos.push(nanoAuto(
+      `nano_ramp_down_${pad(t / 60)}${pad(t % 60)}`,
+      `Nano — Ramp Down ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
+      `RGBW ${rv},${gv},${bv},${wv}`,
+      t, rv, gv, bv, wv,
+    ))
+  }
+
+  const header = [
+    `# AquaLight — Nano (Chihiros WRGB II Pro · UNS 45U) automations`,
+    `# Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
+    `#`,
+    `# WRGB II Pro : MQTT topic ${NANO_TOPIC}`,
+    `#`,
+    `# Ramp up    : ${toTime(rampUpStart).slice(0, 5)} → ${toTime(peakStart).slice(0, 5)} (${step}min steps)`,
+    `# Peak hold  : ${toTime(peakStart).slice(0, 5)} – ${toTime(peakEnd).slice(0, 5)} at R=${r} G=${g} B=${b} W=${w}`,
+    `# Ramp down  : ${toTime(peakEnd).slice(0, 5)} → ${toTime(rampDownEnd).slice(0, 5)} (${step}min steps)`,
+    `# Off        : ${toTime(rampDownEnd).slice(0, 5)} – ${toTime(rampUpStart).slice(0, 5)} (RGBW 0,0,0,0)`,
+    ``,
+  ].join('\n')
+
+  return header + autos.join('\n\n') + '\n'
 }

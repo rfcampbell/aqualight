@@ -236,12 +236,12 @@ export default function Timeline({ schedule, onChange }: Props) {
             />
           ))}
 
-          {/* Now-line: double stroke for neon magenta glow */}
+          {/* Now-line: soft purple glow + thin core */}
           <line x1={currentMinute} y1="0" x2={currentMinute} y2={VIEW_H}
-            stroke="#ff00cc" strokeWidth="5" opacity="0.25"
+            stroke="#7c3aed" strokeWidth="3" opacity="0.3"
             className={styles.nowLine} />
           <line x1={currentMinute} y1="0" x2={currentMinute} y2={VIEW_H}
-            stroke="#ff40e0" strokeWidth="1.5"
+            stroke="#a855f7" strokeWidth="0.8"
             className={styles.nowLine} />
         </svg>
 

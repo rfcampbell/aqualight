@@ -1,6 +1,23 @@
+import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { ScheduleState } from '../types'
 import styles from './ChannelEditor.module.css'
+
+const LS_KEY = 'aqualight_defaults'
+
+export function saveDefaults(schedule: ScheduleState) {
+  localStorage.setItem(LS_KEY, JSON.stringify({
+    wrgbChannels: schedule.wrgbChannels,
+    spotlightBrightness: schedule.spotlightBrightness,
+  }))
+}
+
+export function loadDefaults(): Pick<ScheduleState, 'wrgbChannels' | 'spotlightBrightness'> | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
 
 interface Props {
   schedule: ScheduleState
@@ -36,8 +53,15 @@ function Slider({
 }
 
 export default function ChannelEditor({ schedule, onChange }: Props) {
+  const [saved, setSaved] = useState(false)
   const { wrgbChannels, spotlightBrightness } = schedule
   const { r, g, b, w } = wrgbChannels
+
+  function handleSetDefault() {
+    saveDefaults(schedule)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   const setChannel = (channel: keyof typeof wrgbChannels, val: number) =>
     onChange({ ...schedule, wrgbChannels: { ...wrgbChannels, [channel]: val } })
@@ -78,6 +102,10 @@ export default function ChannelEditor({ schedule, onChange }: Props) {
         />
         <span className={styles.sliderValue}>{spotlightBrightness}</span>
       </div>
+
+      <button className={saved ? styles.defaultBtnSaved : styles.defaultBtn} onClick={handleSetDefault}>
+        {saved ? '✓ saved as default' : 'set as default'}
+      </button>
     </div>
   )
 }

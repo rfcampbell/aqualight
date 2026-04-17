@@ -29,6 +29,15 @@ export interface ScheduleState {
   ppfdSpotlight: number        // µmol/m²/s
 }
 
+export interface NanoScheduleState {
+  rampUpStart: number    // minute of day
+  peakStart: number      // minute of day
+  peakEnd: number        // minute of day
+  rampDownEnd: number    // minute of day
+  peakRgbw: RgbwChannels
+  stepMinutes: number    // interpolation interval (default 5)
+}
+
 export interface TimeBlock {
   id: string
   type: 'wrgb' | 'spotlight' | 'sunrise' | 'sunset' | 'overlap'
@@ -36,3 +45,4 @@ export interface TimeBlock {
   endMinute: number
   color: string
 }
+

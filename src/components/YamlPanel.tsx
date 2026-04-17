@@ -1,20 +1,16 @@
 import { useState } from 'react'
-import type { ScheduleState } from '../types'
-import { generateYaml } from '../utils/generateYaml'
 import styles from './YamlPanel.module.css'
 
 interface Props {
-  schedule: ScheduleState
+  yaml: string
 }
 
 type DeployState = 'idle' | 'deploying' | 'ok' | 'error'
 
-export default function YamlPanel({ schedule }: Props) {
+export default function YamlPanel({ yaml }: Props) {
   const [copied, setCopied]         = useState(false)
   const [deploy, setDeploy]         = useState<DeployState>('idle')
   const [deployMsg, setDeployMsg]   = useState('')
-
-  const yaml = generateYaml(schedule)
   const lineCount = yaml.split('\n').length
 
   const handleCopy = async () => {

@@ -83,6 +83,52 @@ body {
   border-left: 1px solid var(--color-border);
 }
 
+/* Device tabs */
+.device-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.device-tab {
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.device-tab:hover {
+  color: var(--color-text-secondary);
+}
+
+.device-tab--active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.device-tab-sub {
+  font-size: 0.68rem;
+  color: var(--color-muted);
+  opacity: 0.8;
+}
+
+.device-tab--active .device-tab-sub {
+  color: var(--color-text-secondary);
+}
+
 /* Main layout */
 .app-main {
   max-width: 1400px;
@@ -125,6 +171,7 @@ body {
 .spacer {
   height: 1.25rem;
 }
+
 
 @media (max-width: 900px) {
   .two-col {
