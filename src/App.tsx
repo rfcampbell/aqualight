@@ -112,7 +112,7 @@ export default function App() {
             </section>
 
             <section className="section two-col" style={{ alignItems: 'start' }}>
-              <YamlPanel yaml={bioYaml} />
+              <YamlPanel yaml={bioYaml} prefix="aquarium_" />
               <DeviceTest schedule={schedule} />
             </section>
           </>
@@ -124,7 +124,7 @@ export default function App() {
             </section>
 
             <section className="section">
-              <YamlPanel yaml={nanoYaml} />
+              <YamlPanel yaml={nanoYaml} prefix="nano_" />
             </section>
           </>
         )}

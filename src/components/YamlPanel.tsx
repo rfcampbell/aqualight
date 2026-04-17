@@ -3,11 +3,12 @@ import styles from './YamlPanel.module.css'
 
 interface Props {
   yaml: string
+  prefix: string
 }
 
 type DeployState = 'idle' | 'deploying' | 'ok' | 'error'
 
-export default function YamlPanel({ yaml }: Props) {
+export default function YamlPanel({ yaml, prefix }: Props) {
   const [copied, setCopied]         = useState(false)
   const [deploy, setDeploy]         = useState<DeployState>('idle')
   const [deployMsg, setDeployMsg]   = useState('')
@@ -36,14 +37,15 @@ export default function YamlPanel({ yaml }: Props) {
       const res  = await fetch('/api/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ yaml }),
+        body: JSON.stringify({ yaml, prefix }),
       })
       const data = await res.json()
       if (data.success) {
-        const reloadNote = data.reload.status === 'reloaded'
+        const reloadNote = data.reload?.status === 'reloaded'
           ? 'Automations reloaded.'
-          : data.reload.reason ?? 'Set HA_TOKEN to auto-reload.'
-        setDeployMsg(`Deployed. ${reloadNote}`)
+          : data.reload?.reason ?? 'Set HA_TOKEN to auto-reload.'
+        const mergeNote = `Kept ${data.kept}, removed ${data.removed}, added ${data.added}.`
+        setDeployMsg(`Deployed. ${mergeNote} ${reloadNote}`)
         setDeploy('ok')
       } else {
         setDeployMsg(data.error ?? 'Deploy failed.')

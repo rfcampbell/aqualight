@@ -3,11 +3,13 @@ AquaLight backend — serves the React dist, deploys automations.yaml, and
 provides live device test endpoints for WRGB (MQTT) and Spotlight (HA API).
 """
 import glob
+import io
 import json
 import os
 import subprocess
 import urllib.request
 from datetime import date
+from ruamel.yaml import YAML
 from flask import Flask, jsonify, request, send_from_directory
 
 app = Flask(__name__, static_folder='../dist', static_url_path='')
@@ -33,17 +35,74 @@ def serve(path):
 
 # ── Deploy ─────────────────────────────────────────────────────────────────────
 
+KNOWN_PREFIXES = ['aquarium_', 'nano_']
+
+def _merge_automations(existing_bytes: bytes, incoming_text: str, prefix: str) -> tuple[dict, bytes]:
+    """
+    Parse existing automations and incoming YAML, then:
+    - Validate all incoming IDs start with `prefix`
+    - Remove existing entries whose ID starts with `prefix`
+    - Preserve all other existing entries (including other known and unknown prefixes)
+    - Append incoming entries at the end
+    Returns (summary_dict, merged_yaml_bytes).
+    """
+    ryaml = YAML()
+    ryaml.preserve_quotes = True
+
+    existing = ryaml.load(existing_bytes) or []
+    incoming = ryaml.load(incoming_text) or []
+
+    for item in incoming:
+        aid = str(item.get('id', ''))
+        if not aid.startswith(prefix):
+            raise ValueError(f"Incoming id '{aid}' does not start with declared prefix '{prefix}'")
+
+    kept    = [item for item in existing if not str(item.get('id', '')).startswith(prefix)]
+    removed = [str(item.get('id', '')) for item in existing if str(item.get('id', '')).startswith(prefix)]
+    merged  = kept + list(incoming)
+
+    buf = io.BytesIO()
+    ryaml.dump(merged, buf)
+
+    summary = {
+        'kept':    len(kept),
+        'removed': len(removed),
+        'added':   len(incoming),
+    }
+    return summary, buf.getvalue()
+
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy():
-    data = request.get_json(force=True)
+    data     = request.get_json(force=True)
     yaml_content = data.get('yaml', '').strip()
+    prefix   = data.get('prefix', '').strip()
+    dry_run  = bool(data.get('dry_run', False))
+
     if not yaml_content:
         return jsonify({'error': 'No YAML provided'}), 400
+    if prefix not in KNOWN_PREFIXES:
+        return jsonify({'error': f"Unknown prefix '{prefix}'. Must be one of: {KNOWN_PREFIXES}"}), 400
 
     automations = os.path.join(HA_CONFIG, 'automations.yaml')
     iso    = date.today().isoformat()
     backup = os.path.join(HA_CONFIG, f'automations_{iso}.yaml.bak')
 
+    try:
+        result = subprocess.run(['sudo', 'cat', automations], capture_output=True, check=True)
+        existing_bytes = result.stdout
+    except Exception:
+        existing_bytes = b'[]\n'
+
+    try:
+        summary, merged_bytes = _merge_automations(existing_bytes, yaml_content, prefix)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    if dry_run:
+        return jsonify({'dry_run': True, **summary})
+
+    # Backup before writing
     try:
         subprocess.run(['sudo', 'cp', automations, backup], check=True, capture_output=True)
         baks = sorted(glob.glob(os.path.join(HA_CONFIG, 'automations_*.yaml.bak')), reverse=True)
@@ -55,14 +114,14 @@ def deploy():
     try:
         subprocess.run(
             ['sudo', 'tee', automations],
-            input=yaml_content.encode(),
+            input=merged_bytes,
             capture_output=True,
             check=True,
         )
     except subprocess.CalledProcessError as e:
         return jsonify({'error': f'Write failed: {e.stderr.decode()}'}), 500
 
-    return jsonify({'success': True, 'backup': backup, 'reload': _reload_ha()})
+    return jsonify({'success': True, 'backup': backup, **summary, 'reload': _reload_ha()})
 
 
 def _reload_ha():
