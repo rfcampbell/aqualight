@@ -4,22 +4,29 @@ import type { ScheduleState, NanoScheduleState } from '../types'
 
 export interface LightConfig {
   entityId: string
-  /** When true, emit mqtt.publish instead of light.turn_on/off (legacy fallback) */
-  useMqttPublishLegacy?: boolean
-  /** MQTT topic — required when useMqttPublishLegacy is true */
+  /**
+   * When true (default for Chihiros WRGB), emit mqtt.publish with flat
+   * red/green/blue/white fields (0-100 scale) that the chihiros-mqtt bridge
+   * understands. When false, emit light.turn_on with rgbw_color (0-255).
+   */
+  useMqttPublish?: boolean
+  /** MQTT topic — required when useMqttPublish is true */
   mqttTopic?: string
 }
 
+// Chihiros WRGB goes through an MQTT bridge that expects flat 0-100 fields.
+// HA's light.turn_on with rgbw_color wraps values in a color:{} object the
+// bridge doesn't understand, so mqtt.publish is the only working path.
 export const BIOTOPE_LIGHT_CONFIG: LightConfig = {
-  entityId: 'light.chihiros_wrgb',
-  useMqttPublishLegacy: false,
-  mqttTopic: 'chihiros/light/set',
+  entityId:      'light.chihiros_wrgb',
+  useMqttPublish: true,
+  mqttTopic:     'chihiros/light/set',
 }
 
 export const NANO_LIGHT_CONFIG: LightConfig = {
-  entityId: 'light.chihiros_nano_wrgb',
-  useMqttPublishLegacy: false,
-  mqttTopic: 'chihiros/nano/light/set',
+  entityId:      'light.chihiros_nano_wrgb',
+  useMqttPublish: true,
+  mqttTopic:     'chihiros/nano/light/set',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -34,7 +41,7 @@ function clamp(v: number): number {
   return Math.min(100, Math.max(0, Math.round(v)))
 }
 
-/** Convert internal 0-100 scale to HA rgbw_color 0-255 */
+/** Convert internal 0-100 scale to HA rgbw_color 0-255 (used only in ha-light mode) */
 function to255(v: number): number {
   return Math.round(v * 2.55)
 }
@@ -64,7 +71,7 @@ function fmtWrgbAction(
   r: number, g: number, b: number, w: number,
   cfg: LightConfig,
 ): string[] {
-  if (cfg.useMqttPublishLegacy) {
+  if (cfg.useMqttPublish) {
     return [
       `    - service: mqtt.publish`,
       `      data:`,
@@ -81,9 +88,6 @@ function fmtWrgbAction(
     ]
   }
 
-  // brightness_pct omitted: the Chihiros WRGB driver ignores it entirely (tested:
-  // brightness_pct 40 and 100 produce identical PAR). rgbw_color is the sole control
-  // surface and values are treated as absolute channel levels (0-255).
   return [
     `    - action: light.turn_on`,
     `      target:`,
@@ -247,7 +251,7 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
   // ── Sort and render ───────────────────────────────────────────────────────
   autos.sort((a, b) => a.at - b.at)
 
-  const lightDesc = cfg.useMqttPublishLegacy
+  const lightDesc = cfg.useMqttPublish
     ? `MQTT topic ${cfg.mqttTopic ?? 'chihiros/light/set'}`
     : `HA entity ${cfg.entityId}`
 
@@ -286,7 +290,7 @@ function nanoAuto(
     `  action:`,
   ]
 
-  const action = cfg.useMqttPublishLegacy
+  const action = cfg.useMqttPublish
     ? [
         `    - service: mqtt.publish`,
         `      data:`,
@@ -316,7 +320,7 @@ function nanoOffAuto(id: string, alias: string, desc: string, at: number, cfg: L
     `  action:`,
   ]
 
-  const action = cfg.useMqttPublishLegacy
+  const action = cfg.useMqttPublish
     ? [
         `    - service: mqtt.publish`,
         `      data:`,
@@ -378,7 +382,7 @@ export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NA
     }
   }
 
-  const lightDesc = cfg.useMqttPublishLegacy
+  const lightDesc = cfg.useMqttPublish
     ? `MQTT topic ${cfg.mqttTopic ?? 'chihiros/nano/light/set'}`
     : `HA entity ${cfg.entityId}`
 
