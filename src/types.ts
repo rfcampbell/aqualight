@@ -23,7 +23,7 @@ export interface ScheduleState {
   sunrise: RampConfig
   sunset: RampConfig
   cycle: CyclePattern
-  wrgbChannels: RgbwChannels   // RGBW levels during on-phase (0-255)
+  wrgbChannels: RgbwChannels   // RGBW levels during on-phase (0-100 per channel)
   spotlightBrightness: number  // 0-255
   ppfdWrgb: number             // µmol/m²/s
   ppfdSpotlight: number        // µmol/m²/s

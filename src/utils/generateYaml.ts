@@ -1,6 +1,28 @@
 import type { ScheduleState, NanoScheduleState } from '../types'
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Light configuration ──────────────────────────────────────────────────────
+
+export interface LightConfig {
+  entityId: string
+  /** When true, emit mqtt.publish instead of light.turn_on/off (legacy fallback) */
+  useMqttPublishLegacy?: boolean
+  /** MQTT topic — required when useMqttPublishLegacy is true */
+  mqttTopic?: string
+}
+
+export const BIOTOPE_LIGHT_CONFIG: LightConfig = {
+  entityId: 'light.chihiros_wrgb',
+  useMqttPublishLegacy: false,
+  mqttTopic: 'chihiros/light/set',
+}
+
+export const NANO_LIGHT_CONFIG: LightConfig = {
+  entityId: 'light.chihiros_nano_wrgb',
+  useMqttPublishLegacy: false,
+  mqttTopic: 'chihiros/nano/light/set',
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function pad(n: number) { return String(Math.floor(n)).padStart(2, '0') }
 
@@ -10,6 +32,11 @@ function toTime(minute: number): string {
 
 function clamp(v: number): number {
   return Math.min(100, Math.max(0, Math.round(v)))
+}
+
+/** Convert internal 0-100 scale to HA rgbw_color 0-255 */
+function to255(v: number): number {
+  return Math.round(v * 2.55)
 }
 
 function mqttPayload(state: 'ON' | 'OFF', r = 0, g = 0, b = 0, w = 0): string {
@@ -32,7 +59,41 @@ interface Auto {
   actions: AutoAction
 }
 
-function fmtAuto(a: Auto): string {
+function fmtWrgbAction(
+  state: 'ON' | 'OFF',
+  r: number, g: number, b: number, w: number,
+  cfg: LightConfig,
+): string[] {
+  if (cfg.useMqttPublishLegacy) {
+    return [
+      `    - service: mqtt.publish`,
+      `      data:`,
+      `        topic: ${cfg.mqttTopic ?? 'chihiros/light/set'}`,
+      `        payload: ${mqttPayload(state, r, g, b, w)}`,
+    ]
+  }
+
+  if (state === 'OFF') {
+    return [
+      `    - action: light.turn_off`,
+      `      target:`,
+      `        entity_id: ${cfg.entityId}`,
+    ]
+  }
+
+  // brightness_pct omitted: the Chihiros WRGB driver ignores it entirely (tested:
+  // brightness_pct 40 and 100 produce identical PAR). rgbw_color is the sole control
+  // surface and values are treated as absolute channel levels (0-255).
+  return [
+    `    - action: light.turn_on`,
+    `      target:`,
+    `        entity_id: ${cfg.entityId}`,
+    `      data:`,
+    `        rgbw_color: [${to255(r)}, ${to255(g)}, ${to255(b)}, ${to255(w)}]`,
+  ]
+}
+
+function fmtAuto(a: Auto, cfg: LightConfig): string {
   const lines: string[] = [
     `- id: '${a.id}'`,
     `  alias: '${a.alias}'`,
@@ -46,19 +107,14 @@ function fmtAuto(a: Auto): string {
 
   if (a.actions.wrgb) {
     const { state, r = 0, g = 0, b = 0, w = 0 } = a.actions.wrgb
-    lines.push(
-      `    - service: mqtt.publish`,
-      `      data:`,
-      `        topic: chihiros/light/set`,
-      `        payload: ${mqttPayload(state, r, g, b, w)}`,
-    )
+    lines.push(...fmtWrgbAction(state, r, g, b, w, cfg))
   }
 
   if (a.actions.spot) {
     const { state, brightness = 100 } = a.actions.spot
     if (state === 'ON') {
       lines.push(
-        `    - service: light.turn_on`,
+        `    - action: light.turn_on`,
         `      target:`,
         `        entity_id: light.aquarium_spotlight`,
         `      data:`,
@@ -66,7 +122,7 @@ function fmtAuto(a: Auto): string {
       )
     } else {
       lines.push(
-        `    - service: light.turn_off`,
+        `    - action: light.turn_off`,
         `      target:`,
         `        entity_id: light.aquarium_spotlight`,
       )
@@ -78,7 +134,7 @@ function fmtAuto(a: Auto): string {
 
 // ── Main generator ───────────────────────────────────────────────────────────
 
-export function generateYaml(state: ScheduleState): string {
+export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LIGHT_CONFIG): string {
   const { sunrise, sunset, cycle, wrgbChannels, spotlightBrightness } = state
   const { r, g, b, w } = wrgbChannels
   const autos: Auto[] = []
@@ -109,7 +165,6 @@ export function generateYaml(state: ScheduleState): string {
       const overlapAt   = Math.max(cursor, end - cycle.overlapMinutes)
       const isLastBlock = end >= cycle.cycleEnd
 
-      // WRGB phase start — turn WRGB on, spotlight off
       autos.push({
         id:          `aquarium_cycle_${cycleNum}_wrgb_on`,
         alias:       `Aquarium — Cycle ${cycleNum} WRGB On`,
@@ -117,11 +172,10 @@ export function generateYaml(state: ScheduleState): string {
         at:          cursor,
         actions: {
           wrgb: { state: 'ON', r, g, b, w },
-          spot: cycleNum > 1 ? { state: 'OFF' } : undefined,  // spotlight already off at start
+          spot: cycleNum > 1 ? { state: 'OFF' } : undefined,
         },
       })
 
-      // Overlap start — spotlight joins while WRGB still on
       if (overlapAt < end) {
         autos.push({
           id:          `aquarium_cycle_${cycleNum}_overlap_start`,
@@ -132,7 +186,6 @@ export function generateYaml(state: ScheduleState): string {
         })
       }
 
-      // WRGB phase end — WRGB off (skip if this is the last block; sunset ramp takes over)
       if (!isLastBlock) {
         autos.push({
           id:          `aquarium_cycle_${cycleNum}_wrgb_off`,
@@ -148,7 +201,6 @@ export function generateYaml(state: ScheduleState): string {
       const end        = Math.min(cursor + cycle.spotlightDuration, cycle.cycleEnd)
       const overlapAt  = Math.max(cursor, end - cycle.overlapMinutes)
 
-      // Overlap start — WRGB rejoins while spotlight still on
       if (overlapAt < end) {
         autos.push({
           id:          `aquarium_cycle_${cycleNum}_wrgb_returns`,
@@ -195,11 +247,15 @@ export function generateYaml(state: ScheduleState): string {
   // ── Sort and render ───────────────────────────────────────────────────────
   autos.sort((a, b) => a.at - b.at)
 
+  const lightDesc = cfg.useMqttPublishLegacy
+    ? `MQTT topic ${cfg.mqttTopic ?? 'chihiros/light/set'}`
+    : `HA entity ${cfg.entityId}`
+
   const header = [
     `# AquaLight — Home Assistant automations`,
     `# Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
     `#`,
-    `# WRGB lamp  : MQTT topic chihiros/light/set`,
+    `# WRGB lamp  : ${lightDesc}`,
     `# Spotlight  : light.aquarium_spotlight`,
     `#`,
     `# Schedule   : Sunrise ${toTime(sunrise.startMinute)} (${sunrise.steps} steps, ${sunrise.durationMinutes}min)`,
@@ -209,15 +265,17 @@ export function generateYaml(state: ScheduleState): string {
     ``,
   ].join('\n')
 
-  return header + autos.map(fmtAuto).join('\n\n') + '\n'
+  return header + autos.map(a => fmtAuto(a, cfg)).join('\n\n') + '\n'
 }
 
 // ── Nano (Chihiros WRGB II Pro) ramp generator ───────────────────────────────
 
-const NANO_TOPIC = 'chihiros/nano/light/set'
-
-function nanoAuto(id: string, alias: string, desc: string, at: number, r: number, g: number, b: number, w: number): string {
-  return [
+function nanoAuto(
+  id: string, alias: string, desc: string, at: number,
+  r: number, g: number, b: number, w: number,
+  cfg: LightConfig,
+): string {
+  const header = [
     `- id: '${id}'`,
     `  alias: '${alias}'`,
     `  description: '${desc}'`,
@@ -226,53 +284,109 @@ function nanoAuto(id: string, alias: string, desc: string, at: number, r: number
     `    - platform: time`,
     `      at: '${toTime(at)}'`,
     `  action:`,
-    `    - service: mqtt.publish`,
-    `      data:`,
-    `        topic: ${NANO_TOPIC}`,
-    `        payload: '{"state":"ON","red":${r},"green":${g},"blue":${b},"white":${w}}'`,
-  ].join('\n')
+  ]
+
+  const action = cfg.useMqttPublishLegacy
+    ? [
+        `    - service: mqtt.publish`,
+        `      data:`,
+        `        topic: ${cfg.mqttTopic ?? 'chihiros/nano/light/set'}`,
+        `        payload: '{"state":"ON","red":${r},"green":${g},"blue":${b},"white":${w}}'`,
+      ]
+    : [
+        `    - action: light.turn_on`,
+        `      target:`,
+        `        entity_id: ${cfg.entityId}`,
+        `      data:`,
+        `        rgbw_color: [${to255(r)}, ${to255(g)}, ${to255(b)}, ${to255(w)}]`,
+      ]
+
+  return [...header, ...action].join('\n')
 }
 
-export function generateNanoYaml(state: NanoScheduleState): string {
+function nanoOffAuto(id: string, alias: string, desc: string, at: number, cfg: LightConfig): string {
+  const header = [
+    `- id: '${id}'`,
+    `  alias: '${alias}'`,
+    `  description: '${desc}'`,
+    `  mode: single`,
+    `  trigger:`,
+    `    - platform: time`,
+    `      at: '${toTime(at)}'`,
+    `  action:`,
+  ]
+
+  const action = cfg.useMqttPublishLegacy
+    ? [
+        `    - service: mqtt.publish`,
+        `      data:`,
+        `        topic: ${cfg.mqttTopic ?? 'chihiros/nano/light/set'}`,
+        `        payload: '{"state":"OFF"}'`,
+      ]
+    : [
+        `    - action: light.turn_off`,
+        `      target:`,
+        `        entity_id: ${cfg.entityId}`,
+      ]
+
+  return [...header, ...action].join('\n')
+}
+
+export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NANO_LIGHT_CONFIG): string {
   const { rampUpStart, peakStart, peakEnd, rampDownEnd, peakRgbw, stepMinutes } = state
   const { r, g, b, w } = peakRgbw
   const step = Math.max(1, stepMinutes)
   const autos: string[] = []
 
-  // Ramp up: rampUpStart → peakStart
+  // Ramp up: rampUpStart → peakStart (skip frac=0 — light is already off from prior night's turn_off)
   const upSteps = Math.round((peakStart - rampUpStart) / step)
   for (let i = 0; i <= upSteps; i++) {
     const t    = rampUpStart + i * step
     const frac = upSteps > 0 ? i / upSteps : 1
+    if (frac === 0) continue
     const rv = clamp(r * frac), gv = clamp(g * frac), bv = clamp(b * frac), wv = clamp(w * frac)
     autos.push(nanoAuto(
       `nano_ramp_up_${pad(t / 60)}${pad(t % 60)}`,
       `Nano — Ramp Up ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
       `RGBW ${rv},${gv},${bv},${wv}`,
-      t, rv, gv, bv, wv,
+      t, rv, gv, bv, wv, cfg,
     ))
   }
 
-  // Ramp down: peakEnd → rampDownEnd  (skip first step if same time as ramp-up last step)
+  // Ramp down: peakEnd → rampDownEnd
   const downSteps = Math.round((rampDownEnd - peakEnd) / step)
   for (let i = 0; i <= downSteps; i++) {
     const t    = peakEnd + i * step
     if (t === peakStart) continue
     const frac = downSteps > 0 ? 1 - i / downSteps : 0
     const rv = clamp(r * frac), gv = clamp(g * frac), bv = clamp(b * frac), wv = clamp(w * frac)
-    autos.push(nanoAuto(
-      `nano_ramp_down_${pad(t / 60)}${pad(t % 60)}`,
-      `Nano — Ramp Down ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
-      `RGBW ${rv},${gv},${bv},${wv}`,
-      t, rv, gv, bv, wv,
-    ))
+
+    if (frac === 0) {
+      autos.push(nanoOffAuto(
+        `nano_ramp_down_${pad(t / 60)}${pad(t % 60)}`,
+        `Nano — Ramp Down ${toTime(t).slice(0, 5)} (0%)`,
+        `RGBW off`,
+        t, cfg,
+      ))
+    } else {
+      autos.push(nanoAuto(
+        `nano_ramp_down_${pad(t / 60)}${pad(t % 60)}`,
+        `Nano — Ramp Down ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
+        `RGBW ${rv},${gv},${bv},${wv}`,
+        t, rv, gv, bv, wv, cfg,
+      ))
+    }
   }
+
+  const lightDesc = cfg.useMqttPublishLegacy
+    ? `MQTT topic ${cfg.mqttTopic ?? 'chihiros/nano/light/set'}`
+    : `HA entity ${cfg.entityId}`
 
   const header = [
     `# AquaLight — Nano (Chihiros WRGB II Pro · UNS 45U) automations`,
     `# Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
     `#`,
-    `# WRGB II Pro : MQTT topic ${NANO_TOPIC}`,
+    `# WRGB II Pro : ${lightDesc}`,
     `#`,
     `# Ramp up    : ${toTime(rampUpStart).slice(0, 5)} → ${toTime(peakStart).slice(0, 5)} (${step}min steps)`,
     `# Peak hold  : ${toTime(peakStart).slice(0, 5)} – ${toTime(peakEnd).slice(0, 5)} at R=${r} G=${g} B=${b} W=${w}`,
