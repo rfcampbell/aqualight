@@ -2,31 +2,39 @@ import type { ScheduleState, NanoScheduleState } from '../types'
 
 // ── Light configuration ──────────────────────────────────────────────────────
 
-export interface LightConfig {
-  entityId: string
-  /**
-   * When true (default for Chihiros WRGB), emit mqtt.publish with flat
-   * red/green/blue/white fields (0-100 scale) that the chihiros-mqtt bridge
-   * understands. When false, emit light.turn_on with rgbw_color (0-255).
-   */
-  useMqttPublish?: boolean
-  /** MQTT topic — required when useMqttPublish is true */
-  mqttTopic?: string
-}
+/**
+ * Discriminated union of how a WRGB light's automations should be emitted.
+ *
+ * - `mqtt`: flat 0-100 channel payload via mqtt.publish. Used by the
+ *   chihiros-mqtt bridge (nano, and the legacy 100P shape).
+ * - `ha_light`: single HA light entity, rgbw_color 0-255. Useful for any
+ *   integration that exposes one RGBW entity per lamp.
+ * - `light_entities`: four HA light entities, one per RGBW channel, each
+ *   driven with brightness_pct 0-100. Used by chihiros-led-control (HACS),
+ *   which is what the 100P now uses via ESP32 Bluetooth Proxy.
+ */
+export type LightConfig =
+  | { kind: 'mqtt';           entityId: string; topic: string }
+  | { kind: 'ha_light';       entityId: string }
+  | {
+      kind: 'light_entities'
+      entityIds: { red: string; green: string; blue: string; white: string }
+    }
 
-// Chihiros WRGB goes through an MQTT bridge that expects flat 0-100 fields.
-// HA's light.turn_on with rgbw_color wraps values in a color:{} object the
-// bridge doesn't understand, so mqtt.publish is the only working path.
 export const BIOTOPE_LIGHT_CONFIG: LightConfig = {
-  entityId:      'light.chihiros_wrgb',
-  useMqttPublish: true,
-  mqttTopic:     'chihiros/light/set',
+  kind: 'light_entities',
+  entityIds: {
+    red:   'light.dywpr120fa39f25d91a7_red',
+    green: 'light.dywpr120fa39f25d91a7_green',
+    blue:  'light.dywpr120fa39f25d91a7_blue',
+    white: 'light.dywpr120fa39f25d91a7_white',
+  },
 }
 
 export const NANO_LIGHT_CONFIG: LightConfig = {
-  entityId:      'light.chihiros_nano_wrgb',
-  useMqttPublish: true,
-  mqttTopic:     'chihiros/nano/light/set',
+  kind: 'mqtt',
+  entityId: 'light.chihiros_nano_wrgb',
+  topic:    'chihiros/nano/light/set',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -41,7 +49,6 @@ function clamp(v: number): number {
   return Math.min(100, Math.max(0, Math.round(v)))
 }
 
-/** Convert internal 0-100 scale to HA rgbw_color 0-255 (used only in ha-light mode) */
 function to255(v: number): number {
   return Math.round(v * 2.55)
 }
@@ -49,6 +56,17 @@ function to255(v: number): number {
 function mqttPayload(state: 'ON' | 'OFF', r = 0, g = 0, b = 0, w = 0): string {
   if (state === 'OFF') return '\'{"state":"OFF"}\''
   return `'{"state":"ON","red":${r},"green":${g},"blue":${b},"white":${w}}'`
+}
+
+function lightDescription(cfg: LightConfig): string {
+  switch (cfg.kind) {
+    case 'mqtt':           return `MQTT topic ${cfg.topic}`
+    case 'ha_light':       return `HA entity ${cfg.entityId}`
+    case 'light_entities': {
+      const { red, green, blue, white } = cfg.entityIds
+      return `HA entities r=${red} g=${green} b=${blue} w=${white}`
+    }
+  }
 }
 
 // ── Automation builder ───────────────────────────────────────────────────────
@@ -71,30 +89,57 @@ function fmtWrgbAction(
   r: number, g: number, b: number, w: number,
   cfg: LightConfig,
 ): string[] {
-  if (cfg.useMqttPublish) {
-    return [
-      `    - service: mqtt.publish`,
-      `      data:`,
-      `        topic: ${cfg.mqttTopic ?? 'chihiros/light/set'}`,
-      `        payload: ${mqttPayload(state, r, g, b, w)}`,
-    ]
-  }
+  switch (cfg.kind) {
+    case 'mqtt':
+      return [
+        `    - service: mqtt.publish`,
+        `      data:`,
+        `        topic: ${cfg.topic}`,
+        `        payload: ${mqttPayload(state, r, g, b, w)}`,
+      ]
 
-  if (state === 'OFF') {
-    return [
-      `    - action: light.turn_off`,
-      `      target:`,
-      `        entity_id: ${cfg.entityId}`,
-    ]
-  }
+    case 'ha_light':
+      if (state === 'OFF') {
+        return [
+          `    - action: light.turn_off`,
+          `      target:`,
+          `        entity_id: ${cfg.entityId}`,
+        ]
+      }
+      return [
+        `    - action: light.turn_on`,
+        `      target:`,
+        `        entity_id: ${cfg.entityId}`,
+        `      data:`,
+        `        rgbw_color: [${to255(r)}, ${to255(g)}, ${to255(b)}, ${to255(w)}]`,
+      ]
 
-  return [
-    `    - action: light.turn_on`,
-    `      target:`,
-    `        entity_id: ${cfg.entityId}`,
-    `      data:`,
-    `        rgbw_color: [${to255(r)}, ${to255(g)}, ${to255(b)}, ${to255(w)}]`,
-  ]
+    case 'light_entities': {
+      const channels: Array<['red' | 'green' | 'blue' | 'white', number]> = [
+        ['red', r], ['green', g], ['blue', b], ['white', w],
+      ]
+      const lines: string[] = []
+      for (const [channel, value] of channels) {
+        const entity = cfg.entityIds[channel]
+        if (state === 'OFF' || value <= 0) {
+          lines.push(
+            `    - action: light.turn_off`,
+            `      target:`,
+            `        entity_id: ${entity}`,
+          )
+        } else {
+          lines.push(
+            `    - action: light.turn_on`,
+            `      target:`,
+            `        entity_id: ${entity}`,
+            `      data:`,
+            `        brightness_pct: ${value}`,
+          )
+        }
+      }
+      return lines
+    }
+  }
 }
 
 function fmtAuto(a: Auto, cfg: LightConfig): string {
@@ -251,15 +296,11 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
   // ── Sort and render ───────────────────────────────────────────────────────
   autos.sort((a, b) => a.at - b.at)
 
-  const lightDesc = cfg.useMqttPublish
-    ? `MQTT topic ${cfg.mqttTopic ?? 'chihiros/light/set'}`
-    : `HA entity ${cfg.entityId}`
-
   const header = [
     `# AquaLight — Home Assistant automations`,
     `# Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
     `#`,
-    `# WRGB lamp  : ${lightDesc}`,
+    `# WRGB lamp  : ${lightDescription(cfg)}`,
     `# Spotlight  : light.aquarium_spotlight`,
     `#`,
     `# Schedule   : Sunrise ${toTime(sunrise.startMinute)} (${sunrise.steps} steps, ${sunrise.durationMinutes}min)`,
@@ -290,22 +331,7 @@ function nanoAuto(
     `  action:`,
   ]
 
-  const action = cfg.useMqttPublish
-    ? [
-        `    - service: mqtt.publish`,
-        `      data:`,
-        `        topic: ${cfg.mqttTopic ?? 'chihiros/nano/light/set'}`,
-        `        payload: '{"state":"ON","red":${r},"green":${g},"blue":${b},"white":${w}}'`,
-      ]
-    : [
-        `    - action: light.turn_on`,
-        `      target:`,
-        `        entity_id: ${cfg.entityId}`,
-        `      data:`,
-        `        rgbw_color: [${to255(r)}, ${to255(g)}, ${to255(b)}, ${to255(w)}]`,
-      ]
-
-  return [...header, ...action].join('\n')
+  return [...header, ...fmtWrgbAction('ON', r, g, b, w, cfg)].join('\n')
 }
 
 function nanoOffAuto(id: string, alias: string, desc: string, at: number, cfg: LightConfig): string {
@@ -320,20 +346,7 @@ function nanoOffAuto(id: string, alias: string, desc: string, at: number, cfg: L
     `  action:`,
   ]
 
-  const action = cfg.useMqttPublish
-    ? [
-        `    - service: mqtt.publish`,
-        `      data:`,
-        `        topic: ${cfg.mqttTopic ?? 'chihiros/nano/light/set'}`,
-        `        payload: '{"state":"OFF"}'`,
-      ]
-    : [
-        `    - action: light.turn_off`,
-        `      target:`,
-        `        entity_id: ${cfg.entityId}`,
-      ]
-
-  return [...header, ...action].join('\n')
+  return [...header, ...fmtWrgbAction('OFF', 0, 0, 0, 0, cfg)].join('\n')
 }
 
 export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NANO_LIGHT_CONFIG): string {
@@ -382,15 +395,11 @@ export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NA
     }
   }
 
-  const lightDesc = cfg.useMqttPublish
-    ? `MQTT topic ${cfg.mqttTopic ?? 'chihiros/nano/light/set'}`
-    : `HA entity ${cfg.entityId}`
-
   const header = [
     `# AquaLight — Nano (Chihiros WRGB II Pro · UNS 45U) automations`,
     `# Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
     `#`,
-    `# WRGB II Pro : ${lightDesc}`,
+    `# WRGB II Pro : ${lightDescription(cfg)}`,
     `#`,
     `# Ramp up    : ${toTime(rampUpStart).slice(0, 5)} → ${toTime(peakStart).slice(0, 5)} (${step}min steps)`,
     `# Peak hold  : ${toTime(peakStart).slice(0, 5)} – ${toTime(peakEnd).slice(0, 5)} at R=${r} G=${g} B=${b} W=${w}`,
