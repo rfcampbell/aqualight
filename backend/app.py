@@ -188,6 +188,116 @@ def test_spotlight():
     return jsonify(result)
 
 
+@app.route('/api/test/light', methods=['POST'])
+def test_light():
+    """
+    Generic HA light service caller. Used by the WRGB four-entity test path.
+    Body: { entity_id: str, state: 'ON'|'OFF', brightness_pct?: int }
+    """
+    data      = request.get_json(force=True)
+    entity_id = data.get('entity_id')
+    state     = data.get('state', 'ON').upper()
+    if not entity_id:
+        return jsonify({'ok': False, 'error': 'entity_id required'}), 400
+
+    if state == 'ON':
+        brightness = int(data.get('brightness_pct', 100))
+        if brightness <= 0:
+            result = _ha_call('POST', '/api/services/light/turn_off', {'entity_id': entity_id})
+        else:
+            result = _ha_call('POST', '/api/services/light/turn_on', {
+                'entity_id': entity_id,
+                'brightness_pct': brightness,
+            })
+    else:
+        result = _ha_call('POST', '/api/services/light/turn_off', {'entity_id': entity_id})
+
+    return jsonify(result)
+
+
+# ── Entity registry ────────────────────────────────────────────────────────────
+
+REJECT_SUFFIXES = (
+    '_auto_off_enabled',
+    '_auto_update_enabled',
+    '_led',
+    '_power_protection',
+    '_overheat_protection',
+    '_undervoltage_protection',
+    '_overcurrent_protection',
+)
+
+import re as _re
+_REJECT_ENABLED_RE = _re.compile(r'_[a-z_]+_enabled$')
+
+
+def _is_feature_toggle(entity_id: str) -> bool:
+    if any(entity_id.endswith(s) for s in REJECT_SUFFIXES):
+        return True
+    if _REJECT_ENABLED_RE.search(entity_id):
+        return True
+    return False
+
+
+@app.route('/api/entities')
+def list_entities():
+    """
+    Returns switch entities from HA, filtered to remove feature toggles.
+    Query params:
+      domain  — comma-separated HA domains to fetch (default: switch)
+      raw     — if '1', include feature toggles in results
+    """
+    domains = request.args.get('domain', 'switch').split(',')
+    include_raw = request.args.get('raw', '0') == '1'
+
+    if not HA_TOKEN:
+        return jsonify({'error': 'HA_TOKEN not configured'}), 503
+
+    results = []
+    for domain in domains:
+        domain = domain.strip()
+        resp = _ha_call('GET', f'/api/states', {})
+        if not resp.get('ok'):
+            return jsonify({'error': resp.get('error', 'HA API error')}), 502
+        break  # _ha_call doesn't handle GET body; fetch all states once below
+
+    # Fetch all states in one request
+    try:
+        req = urllib.request.Request(
+            f'{HA_URL}/api/states',
+            headers={
+                'Authorization': f'Bearer {HA_TOKEN}',
+                'Content-Type': 'application/json',
+            },
+            method='GET',
+        )
+        with urllib.request.urlopen(req, timeout=8) as r:
+            all_states = json.loads(r.read())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+    for state in all_states:
+        entity_id = state.get('entity_id', '')
+        domain_part = entity_id.split('.')[0] if '.' in entity_id else ''
+        if domain_part not in domains:
+            continue
+
+        attrs = state.get('attributes', {})
+        entity = {
+            'entity_id': entity_id,
+            'friendly_name': attrs.get('friendly_name', ''),
+            'device_class': attrs.get('device_class', ''),
+            'original_device_class': attrs.get('original_device_class', ''),
+            'state': state.get('state', ''),
+            'is_feature_toggle': _is_feature_toggle(entity_id),
+        }
+        if include_raw or not entity['is_feature_toggle']:
+            results.append(entity)
+
+    results.sort(key=lambda e: e['entity_id'])
+    return jsonify({'entities': results, 'count': len(results)})
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _mqtt_publish(topic, payload):

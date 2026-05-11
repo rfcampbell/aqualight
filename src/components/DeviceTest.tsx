@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ScheduleState } from '../types'
+import { BIOTOPE_LIGHT_CONFIG, type LightConfig } from '../utils/generateYaml'
 import s from './DeviceTest.module.css'
 
 interface Props {
@@ -15,6 +16,25 @@ interface DeviceState {
 
 const FLASH_MS = 3000
 
+const WRGB_CFG: LightConfig = BIOTOPE_LIGHT_CONFIG
+
+async function callTestLight(entityId: string, state: 'ON' | 'OFF', brightnessPct?: number) {
+  const res = await fetch('/api/test/light', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entity_id: entityId, state, brightness_pct: brightnessPct }),
+  })
+  return res.json() as Promise<{ ok: boolean; error?: string }>
+}
+
+function transportLabel(cfg: LightConfig): string {
+  switch (cfg.kind) {
+    case 'mqtt':           return `MQTT · ${cfg.topic.split('/')[0]}`
+    case 'ha_light':       return 'HA API · rgbw'
+    case 'light_entities': return 'HA API · per-channel'
+  }
+}
+
 export default function DeviceTest({ schedule }: Props) {
   const [wrgb, setWrgb] = useState<DeviceState>({ status: 'idle', message: '' })
   const [spot, setSpot] = useState<DeviceState>({ status: 'idle', message: '' })
@@ -22,26 +42,52 @@ export default function DeviceTest({ schedule }: Props) {
   async function sendWrgb(on: boolean) {
     setWrgb({ status: 'busy', message: '' })
     try {
-      const body = on
-        ? {
-            state: 'ON',
-            r: schedule.wrgbChannels.r,
-            g: schedule.wrgbChannels.g,
-            b: schedule.wrgbChannels.b,
-            w: schedule.wrgbChannels.w,
-          }
-        : { state: 'OFF' }
+      const ch = schedule.wrgbChannels
 
-      const res = await fetch('/api/test/wrgb', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const json = await res.json()
-      if (json.ok) {
-        setWrgb({ status: 'ok', message: on ? 'Light on' : 'Light off' })
-      } else {
-        setWrgb({ status: 'error', message: json.error ?? 'Unknown error' })
+      switch (WRGB_CFG.kind) {
+        case 'mqtt': {
+          const body = on
+            ? { state: 'ON', r: ch.r, g: ch.g, b: ch.b, w: ch.w }
+            : { state: 'OFF' }
+          const res  = await fetch('/api/test/wrgb', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          const json = await res.json()
+          if (json.ok) setWrgb({ status: 'ok', message: on ? 'Light on' : 'Light off' })
+          else         setWrgb({ status: 'error', message: json.error ?? 'Unknown error' })
+          return
+        }
+
+        case 'ha_light': {
+          const json = await callTestLight(WRGB_CFG.entityId, on ? 'ON' : 'OFF', on ? 100 : undefined)
+          if (json.ok) setWrgb({ status: 'ok', message: on ? 'Light on' : 'Light off' })
+          else         setWrgb({ status: 'error', message: json.error ?? 'Unknown error' })
+          return
+        }
+
+        case 'light_entities': {
+          const { red, green, blue, white } = WRGB_CFG.entityIds
+          const calls = on
+            ? [
+                callTestLight(red,   'ON', ch.r),
+                callTestLight(green, 'ON', ch.g),
+                callTestLight(blue,  'ON', ch.b),
+                callTestLight(white, 'ON', ch.w),
+              ]
+            : [
+                callTestLight(red,   'OFF'),
+                callTestLight(green, 'OFF'),
+                callTestLight(blue,  'OFF'),
+                callTestLight(white, 'OFF'),
+              ]
+          const results = await Promise.all(calls)
+          const bad     = results.find(r => !r.ok)
+          if (!bad) setWrgb({ status: 'ok', message: on ? 'Light on' : 'Light off' })
+          else      setWrgb({ status: 'error', message: bad.error ?? 'Unknown error' })
+          return
+        }
       }
     } catch (e: unknown) {
       setWrgb({ status: 'error', message: String(e) })
@@ -93,7 +139,7 @@ export default function DeviceTest({ schedule }: Props) {
         <div className={s.device}>
           <div className={s.deviceHeader}>
             <span className={s.deviceLabel}>WRGB Light</span>
-            <span className={s.deviceMeta}>MQTT · chihiros</span>
+            <span className={s.deviceMeta}>{transportLabel(WRGB_CFG)}</span>
           </div>
           <div className={s.colorPreview} style={{ background: wrgbColor(schedule.wrgbChannels) }} />
           <div className={s.btnRow}>

@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "deploy": "npm run build && sudo rsync -a dist/ /var/www/aqualight/dist/ && sudo rsync -a backend/ /var/www/aqualight/backend/ && sudo systemctl restart aqualight"
   },
   "dependencies": {
@@ -26,6 +28,7 @@
     "globals": "^17.4.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitest": "^4.1.5"
   }
 }
