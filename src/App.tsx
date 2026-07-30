@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ScheduleState, NanoScheduleState } from './types'
 import Timeline from './components/Timeline'
 import CycleControls from './components/CycleControls'
@@ -9,6 +9,7 @@ import YamlPanel from './components/YamlPanel'
 import DeviceTest from './components/DeviceTest'
 import NanoEditor from './components/NanoEditor'
 import NanoDeviceTest from './components/NanoDeviceTest'
+import Presets from './components/Presets'
 import { loadDefaults } from './components/ChannelEditor'
 import { generateYaml, generateNanoYaml } from './utils/generateYaml'
 import './App.css'
@@ -48,6 +49,8 @@ function saveNanoDefaults(s: NanoScheduleState) {
 
 type Device = 'biotope' | 'nano'
 
+type HydrateSource = 'local' | 'ha'
+
 export default function App() {
   const [device, setDevice]     = useState<Device>('biotope')
   const [schedule, setSchedule] = useState<ScheduleState>(() => {
@@ -55,6 +58,31 @@ export default function App() {
     return saved ? { ...DEFAULT_SCHEDULE, ...saved } : DEFAULT_SCHEDULE
   })
   const [nano, setNano] = useState<NanoScheduleState>(() => loadNanoDefaults() ?? DEFAULT_NANO)
+  const [bioSource, setBioSource]   = useState<HydrateSource>('local')
+  const [nanoSource, setNanoSource] = useState<HydrateSource>('local')
+
+  // On mount, hydrate from HA if it has an embedded snapshot for each device.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [bioRes, nanoRes] = await Promise.all([
+          fetch('/api/ha/state?prefix=aquarium_').then(r => r.json()).catch(() => null),
+          fetch('/api/ha/state?prefix=nano_').then(r => r.json()).catch(() => null),
+        ])
+        if (cancelled) return
+        if (bioRes?.exists && bioRes.state) {
+          setSchedule({ ...DEFAULT_SCHEDULE, ...(bioRes.state as ScheduleState) })
+          setBioSource('ha')
+        }
+        if (nanoRes?.exists && nanoRes.state) {
+          setNano({ ...DEFAULT_NANO, ...(nanoRes.state as NanoScheduleState) })
+          setNanoSource('ha')
+        }
+      } catch { /* backend offline — keep local defaults */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   function handleNanoChange(s: NanoScheduleState) {
     setNano(s)
@@ -94,6 +122,15 @@ export default function App() {
       <main className="app-main">
         {device === 'biotope' ? (
           <>
+            <section className="section">
+              <Presets
+                device="biotope"
+                currentState={schedule}
+                source={bioSource}
+                onLoad={s => { setSchedule({ ...DEFAULT_SCHEDULE, ...s }); setBioSource('local') }}
+              />
+            </section>
+
             <section className="section timeline-section">
               <Timeline schedule={schedule} onChange={setSchedule} />
             </section>
@@ -112,19 +149,28 @@ export default function App() {
             </section>
 
             <section className="section two-col" style={{ alignItems: 'start' }}>
-              <YamlPanel yaml={bioYaml} prefix="aquarium_" />
+              <YamlPanel yaml={bioYaml} prefix="aquarium_" state={schedule} />
               <DeviceTest schedule={schedule} />
             </section>
           </>
         ) : (
           <>
+            <section className="section">
+              <Presets
+                device="nano"
+                currentState={nano}
+                source={nanoSource}
+                onLoad={s => { handleNanoChange({ ...DEFAULT_NANO, ...s }); setNanoSource('local') }}
+              />
+            </section>
+
             <section className="section two-col" style={{ alignItems: 'start' }}>
               <NanoEditor schedule={nano} onChange={handleNanoChange} />
               <NanoDeviceTest schedule={nano} />
             </section>
 
             <section className="section">
-              <YamlPanel yaml={nanoYaml} prefix="nano_" />
+              <YamlPanel yaml={nanoYaml} prefix="nano_" state={nano} />
             </section>
           </>
         )}

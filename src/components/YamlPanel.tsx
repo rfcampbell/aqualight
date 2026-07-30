@@ -4,11 +4,12 @@ import styles from './YamlPanel.module.css'
 interface Props {
   yaml: string
   prefix: string
+  state?: unknown  // embedded in HA automations.yaml so any browser can rehydrate
 }
 
 type DeployState = 'idle' | 'deploying' | 'ok' | 'error'
 
-export default function YamlPanel({ yaml, prefix }: Props) {
+export default function YamlPanel({ yaml, prefix, state }: Props) {
   const [copied, setCopied]         = useState(false)
   const [deploy, setDeploy]         = useState<DeployState>('idle')
   const [deployMsg, setDeployMsg]   = useState('')
@@ -37,7 +38,7 @@ export default function YamlPanel({ yaml, prefix }: Props) {
       const res  = await fetch('/api/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ yaml, prefix }),
+        body: JSON.stringify({ yaml, prefix, state }),
       })
       const data = await res.json()
       if (data.success) {

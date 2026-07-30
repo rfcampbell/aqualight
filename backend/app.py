@@ -6,6 +6,7 @@ import glob
 import io
 import json
 import os
+import re
 import subprocess
 import urllib.request
 from datetime import date
@@ -22,6 +23,7 @@ MQTT_PORT  = int(os.environ.get('MQTT_PORT', 1883))
 MQTT_TOPIC      = os.environ.get('MQTT_TOPIC',      'chihiros/light/set')
 MQTT_TOPIC_NANO = os.environ.get('MQTT_TOPIC_NANO', 'chihiros/nano/light/set')
 SPOT_ENTITY     = os.environ.get('SPOT_ENTITY',     'light.aquarium_spotlight')
+PRESETS_DIR     = os.environ.get('PRESETS_DIR',     os.path.join(os.path.dirname(__file__), 'presets'))
 
 # ── Static serving ─────────────────────────────────────────────────────────────
 
@@ -37,19 +39,61 @@ def serve(path):
 
 KNOWN_PREFIXES = ['aquarium_', 'nano_']
 
-def _merge_automations(existing_bytes: bytes, incoming_text: str, prefix: str) -> tuple[dict, bytes]:
+# State comment marker. One line per prefix, kept at the top of automations.yaml.
+# Format: # AQUALIGHT_STATE:{prefix}={compact json}
+_STATE_LINE_RE = re.compile(rb'^# AQUALIGHT_STATE:([a-z_]+)=(.*)$', re.MULTILINE)
+
+
+def _strip_state_lines(text: bytes) -> bytes:
+    """Remove all AQUALIGHT_STATE comment lines from the given bytes."""
+    return _STATE_LINE_RE.sub(b'', text).lstrip(b'\n')
+
+
+def _extract_state_lines(text: bytes) -> dict:
+    """Return {prefix: state_dict} for every AQUALIGHT_STATE line found."""
+    out = {}
+    for m in _STATE_LINE_RE.finditer(text):
+        prefix = m.group(1).decode()
+        try:
+            out[prefix] = json.loads(m.group(2).decode())
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return out
+
+
+def _prepend_state_line(text: bytes, prefix: str, state: dict, existing_states: dict) -> bytes:
+    """Prepend one state line per known prefix so cross-device state persists."""
+    merged_states = {**existing_states, prefix: state}
+    lines = []
+    for pfx, st in merged_states.items():
+        payload = json.dumps(st, separators=(',', ':'))
+        lines.append(f"# AQUALIGHT_STATE:{pfx}={payload}\n".encode())
+    return b''.join(lines) + text
+
+
+def _merge_automations(
+    existing_bytes: bytes,
+    incoming_text: str,
+    prefix: str,
+    state: dict | None = None,
+) -> tuple[dict, bytes]:
     """
     Parse existing automations and incoming YAML, then:
     - Validate all incoming IDs start with `prefix`
     - Remove existing entries whose ID starts with `prefix`
     - Preserve all other existing entries (including other known and unknown prefixes)
     - Append incoming entries at the end
+    - If `state` is given, embed it as a top-of-file AQUALIGHT_STATE comment
+      (replacing any prior line for the same prefix, preserving lines for other prefixes)
     Returns (summary_dict, merged_yaml_bytes).
     """
     ryaml = YAML()
     ryaml.preserve_quotes = True
 
-    existing = ryaml.load(existing_bytes) or []
+    prior_states = _extract_state_lines(existing_bytes)
+    stripped = _strip_state_lines(existing_bytes)
+
+    existing = ryaml.load(stripped) or []
     incoming = ryaml.load(incoming_text) or []
 
     for item in incoming:
@@ -63,13 +107,24 @@ def _merge_automations(existing_bytes: bytes, incoming_text: str, prefix: str) -
 
     buf = io.BytesIO()
     ryaml.dump(merged, buf)
+    out = buf.getvalue()
+
+    if state is not None:
+        out = _prepend_state_line(out, prefix, state, prior_states)
+    elif prior_states:
+        # No new state provided but keep any pre-existing state lines intact.
+        lines = b''.join(
+            f"# AQUALIGHT_STATE:{p}={json.dumps(s, separators=(',', ':'))}\n".encode()
+            for p, s in prior_states.items()
+        )
+        out = lines + out
 
     summary = {
         'kept':    len(kept),
         'removed': len(removed),
         'added':   len(incoming),
     }
-    return summary, buf.getvalue()
+    return summary, out
 
 
 @app.route('/api/deploy', methods=['POST'])
@@ -77,6 +132,7 @@ def deploy():
     data     = request.get_json(force=True)
     yaml_content = data.get('yaml', '').strip()
     prefix   = data.get('prefix', '').strip()
+    state    = data.get('state')  # optional; if present, embedded in top-of-file comment
     dry_run  = bool(data.get('dry_run', False))
 
     if not yaml_content:
@@ -95,7 +151,7 @@ def deploy():
         existing_bytes = b'[]\n'
 
     try:
-        summary, merged_bytes = _merge_automations(existing_bytes, yaml_content, prefix)
+        summary, merged_bytes = _merge_automations(existing_bytes, yaml_content, prefix, state)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
@@ -128,6 +184,112 @@ def _reload_ha():
     if not HA_TOKEN:
         return {'status': 'skipped', 'reason': 'HA_TOKEN not set'}
     return _ha_call('POST', '/api/services/automation/reload', {})
+
+
+# ── HA state read ──────────────────────────────────────────────────────────────
+
+@app.route('/api/ha/state')
+def get_ha_state():
+    """
+    Return the AQUALIGHT_STATE snapshot embedded in HA's automations.yaml.
+    Query params:
+      prefix — 'aquarium_' or 'nano_'; if omitted, returns all found.
+    """
+    prefix = request.args.get('prefix', '').strip()
+    automations = os.path.join(HA_CONFIG, 'automations.yaml')
+    try:
+        result = subprocess.run(['sudo', 'cat', automations], capture_output=True, check=True)
+        existing_bytes = result.stdout
+    except Exception as e:
+        return jsonify({'exists': False, 'error': str(e)}), 200
+
+    states = _extract_state_lines(existing_bytes)
+    if not prefix:
+        return jsonify({'exists': bool(states), 'states': states})
+
+    if prefix in states:
+        return jsonify({'exists': True, 'state': states[prefix]})
+    return jsonify({'exists': False})
+
+
+# ── Presets ────────────────────────────────────────────────────────────────────
+
+_NAME_RE = re.compile(r'^[A-Za-z0-9_\- ]{1,64}$')
+
+
+def _preset_path(name: str) -> str:
+    return os.path.join(PRESETS_DIR, name + '.json')
+
+
+@app.route('/api/presets', methods=['GET'])
+def list_presets():
+    if not os.path.isdir(PRESETS_DIR):
+        return jsonify({'presets': []})
+    items = []
+    for fname in sorted(os.listdir(PRESETS_DIR)):
+        if not fname.endswith('.json'):
+            continue
+        path = os.path.join(PRESETS_DIR, fname)
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            items.append({
+                'name':     data.get('name', fname[:-5]),
+                'device':   data.get('device', 'biotope'),
+                'saved_at': data.get('saved_at', ''),
+            })
+        except (OSError, json.JSONDecodeError):
+            continue
+    return jsonify({'presets': items})
+
+
+@app.route('/api/presets', methods=['POST'])
+def save_preset():
+    data   = request.get_json(force=True)
+    name   = str(data.get('name', '')).strip()
+    device = str(data.get('device', '')).strip()
+    state  = data.get('state')
+
+    if not _NAME_RE.match(name):
+        return jsonify({'error': 'Invalid name (letters, digits, space, - and _ only; max 64 chars)'}), 400
+    if device not in ('biotope', 'nano'):
+        return jsonify({'error': "device must be 'biotope' or 'nano'"}), 400
+    if not isinstance(state, dict):
+        return jsonify({'error': 'state must be an object'}), 400
+
+    os.makedirs(PRESETS_DIR, exist_ok=True)
+    payload = {
+        'name':     name,
+        'device':   device,
+        'state':    state,
+        'saved_at': date.today().isoformat(),
+    }
+    with open(_preset_path(name), 'w') as f:
+        json.dump(payload, f, indent=2)
+
+    return jsonify({'ok': True, 'name': name})
+
+
+@app.route('/api/presets/<name>', methods=['GET'])
+def get_preset(name: str):
+    if not _NAME_RE.match(name):
+        return jsonify({'error': 'Invalid name'}), 400
+    path = _preset_path(name)
+    if not os.path.exists(path):
+        return jsonify({'error': 'Not found'}), 404
+    with open(path) as f:
+        return jsonify(json.load(f))
+
+
+@app.route('/api/presets/<name>', methods=['DELETE'])
+def delete_preset(name: str):
+    if not _NAME_RE.match(name):
+        return jsonify({'error': 'Invalid name'}), 400
+    path = _preset_path(name)
+    if not os.path.exists(path):
+        return jsonify({'error': 'Not found'}), 404
+    os.remove(path)
+    return jsonify({'ok': True})
 
 # ── Device test ────────────────────────────────────────────────────────────────
 
