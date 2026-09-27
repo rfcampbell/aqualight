@@ -32,8 +32,29 @@ PRESETS_DIR     = os.environ.get('PRESETS_DIR',     os.path.join(os.path.dirname
 def serve(path):
     full = os.path.join(app.static_folder, path)
     if path and os.path.exists(full):
-        return send_from_directory(app.static_folder, path)
-    return send_from_directory(app.static_folder, 'index.html')
+        resp = send_from_directory(app.static_folder, path)
+        # Vite hashes asset filenames, so they're safe to cache forever.
+        # index.html must always revalidate or the browser pins an old build.
+        resp.headers['Cache-Control'] = (
+            'public, max-age=31536000, immutable' if path.startswith('assets/') else 'no-cache'
+        )
+        return resp
+
+    # A missing hashed asset means the client is running a stale index.html.
+    # 404 loudly instead of returning HTML the browser will parse as JS.
+    if path.startswith('assets/'):
+        return jsonify({'error': f'Asset not found: {path}. Hard-reload to pick up the current build.'}), 404
+
+    resp = send_from_directory(app.static_folder, 'index.html')
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+@app.after_request
+def _no_cache_api(resp):
+    if request.path.startswith('/api/'):
+        resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 # ── Deploy ─────────────────────────────────────────────────────────────────────
 
