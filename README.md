@@ -31,6 +31,16 @@ duplicated per light: `light_entities` (four HA entities, `brightness_pct`),
 
 Adding a light means an entry in both files and nothing else.
 
+### Display (WRGB II Pro 90) — not yet installed
+
+`display` is in the registry with placeholder entity ids, placeholder ramp
+waypoints and unmeasured DLI values, all marked `TODO` in `src/lights.ts`. Its
+`dli.todo` field is set so nothing mistakes the numbers for measurements. On
+arrival: replace the four `light.display_*` entity ids with the real ones from
+chihiros-led-control (expect opaque device ids like the 100P's
+`light.dywpr120fa39f25d91a7_red`, not `display_*`), set the real waypoints, and
+measure PPFD.
+
 ## Development
 
 Production and dev run on the same host (robix). They are kept apart by port

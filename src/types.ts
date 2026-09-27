@@ -98,13 +98,18 @@ interface LightBase {
   storage: { key: string; fields?: string[] }
   /** Endpoint for the live device test, when the transport needs a dedicated one. */
   mqttTestEndpoint?: string
+  /**
+   * PAR/DLI parameters. Optional: a light can be in the registry before its
+   * output has been measured. Only siesta lights currently surface an
+   * estimator in the UI, because NanoScheduleState carries no ppfd fields.
+   */
+  dli?: DliParams
 }
 
 export interface SiestaLight extends LightBase {
   scheduleKind: 'siesta'
   defaults: ScheduleState
   spotlight?: { entityId: string }
-  dli?: DliParams
 }
 
 export interface RampLight extends LightBase {

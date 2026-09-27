@@ -20,7 +20,7 @@ describe('light registry', () => {
   })
 
   it('derives KNOWN_PREFIXES from the registry in declaration order', () => {
-    expect(KNOWN_PREFIXES).toEqual(['aquarium_', 'nano_'])
+    expect(KNOWN_PREFIXES).toEqual(['aquarium_', 'nano_', 'display_'])
   })
 
   it('gives every light a unique id, prefix, preset id and storage key', () => {
@@ -41,12 +41,25 @@ describe('light registry', () => {
     for (const l of LIGHTS) expect(l.prefix.endsWith('_')).toBe(true)
   })
 
-  it('gives only siesta lights a spotlight and DLI', () => {
+  it('gives a spotlight only to siesta lights', () => {
     for (const l of LIGHTS) {
-      if (l.scheduleKind === 'ramp') {
-        expect('spotlight' in l).toBe(false)
-        expect('dli' in l).toBe(false)
-      }
+      if (l.scheduleKind === 'ramp') expect('spotlight' in l).toBe(false)
     }
+  })
+
+  it('marks placeholder DLI values as TODO so they cannot pass for measured', () => {
+    // The display lamp is not installed yet. Its numbers are invented, and
+    // anything reading them needs to be able to tell.
+    const display = lightById('display')!
+    expect(display.dli?.todo).toBeTruthy()
+    expect(lightById('biotope')!.dli?.todo).toBeUndefined()
+  })
+
+  it('has the display light on the nano ramp shape with no spotlight', () => {
+    const d = lightById('display')!
+    expect(d.scheduleKind).toBe('ramp')
+    expect(d.prefix).toBe('display_')
+    expect('spotlight' in d).toBe(false)
+    expect(d.transport.kind).toBe('light_entities')
   })
 })

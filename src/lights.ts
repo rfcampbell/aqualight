@@ -85,7 +85,57 @@ const NANO: RampLight = {
   },
 }
 
-export const LIGHTS: Light[] = [BIOTOPE, NANO]
+/**
+ * Display — Chihiros WRGB II Pro 90. NOT YET DELIVERED.
+ *
+ * TODO on arrival:
+ *  - replace the placeholder entity ids with the real ones from
+ *    chihiros-led-control (the 100P's are opaque device ids, e.g.
+ *    light.dywpr120fa39f25d91a7_red, so expect the same shape, not display_*)
+ *  - measure PPFD and replace DISPLAY_DLI
+ *  - set real ramp waypoints; the times below are copied from the nano
+ */
+const DISPLAY_DLI: DliParams = {
+  ppfdWrgb:      100,  // TODO placeholder — not measured
+  ppfdSpotlight: 0,    // no spotlight on this light
+  todo:          'Placeholder values. Measure PPFD once the WRGB II Pro 90 is installed.',
+}
+
+const DISPLAY: RampLight = {
+  id:          'display',
+  prefix:      'display_',
+  presetId:    'display',
+  label:       'WRGB II Pro 90',
+  sublabel:    'Display',
+  aliasPrefix: 'Display',
+  scheduleKind: 'ramp',
+  // Same transport as the 100P: four HA entities via chihiros-led-control.
+  transport: {
+    kind: 'light_entities',
+    entityIds: {
+      red:   'light.display_red',    // TODO placeholder
+      green: 'light.display_green',  // TODO placeholder
+      blue:  'light.display_blue',   // TODO placeholder
+      white: 'light.display_white',  // TODO placeholder
+    },
+  },
+  header: {
+    title:     'AquaLight — Display (Chihiros WRGB II Pro 90) automations',
+    lampLabel: 'WRGB II Pro ',
+  },
+  storage: { key: 'aqualight_display' },
+  dli:     DISPLAY_DLI,
+  defaults: {
+    rampUpStart: 420,   // 07:00  TODO placeholder
+    peakStart:   540,   // 09:00  TODO placeholder
+    peakEnd:     1080,  // 18:00  TODO placeholder
+    rampDownEnd: 1200,  // 20:00  TODO placeholder
+    peakRgbw:    { r: 40, g: 40, b: 45, w: 55 },  // TODO placeholder
+    stepMinutes: 5,
+  },
+}
+
+export const LIGHTS: Light[] = [BIOTOPE, NANO, DISPLAY]
 
 export const KNOWN_PREFIXES: string[] = LIGHTS.map(l => l.prefix)
 
