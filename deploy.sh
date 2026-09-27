@@ -35,7 +35,7 @@ EOF
   fi
 
   # sudoers rule: allow writing automations.yaml without password
-  echo 'rcampbell ALL=(ALL) NOPASSWD: /usr/bin/cp, /usr/bin/tee, /usr/bin/rm' \
+  echo 'rcampbell ALL=(ALL) NOPASSWD: /usr/bin/cat, /usr/bin/cp, /usr/bin/tee, /usr/bin/rm' \
     | sudo tee /etc/sudoers.d/aqualight > /dev/null
   sudo chmod 440 /etc/sudoers.d/aqualight
 

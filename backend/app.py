@@ -92,6 +92,29 @@ def _prepend_state_line(text: bytes, prefix: str, state: dict, existing_states: 
     return b''.join(lines) + text
 
 
+def _read_automations() -> bytes | None:
+    """
+    Read automations.yaml. Returns b'' if the file genuinely doesn't exist yet,
+    or None if it exists but can't be read — callers must NOT treat None as
+    empty, or a deploy would overwrite every other automation in the file.
+    """
+    path = os.path.join(HA_CONFIG, 'automations.yaml')
+    try:
+        with open(path, 'rb') as f:
+            return f.read()
+    except FileNotFoundError:
+        return b''
+    except OSError:
+        pass
+    # Fall back to sudo for root-owned config dirs. -n so we fail fast instead
+    # of blocking on a password prompt (systemd gives us no tty anyway).
+    try:
+        result = subprocess.run(['sudo', '-n', 'cat', path], capture_output=True, check=True)
+        return result.stdout
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
 def _merge_automations(
     existing_bytes: bytes,
     incoming_text: str,
@@ -165,11 +188,12 @@ def deploy():
     iso    = date.today().isoformat()
     backup = os.path.join(HA_CONFIG, f'automations_{iso}.yaml.bak')
 
-    try:
-        result = subprocess.run(['sudo', 'cat', automations], capture_output=True, check=True)
-        existing_bytes = result.stdout
-    except Exception:
-        existing_bytes = b'[]\n'
+    existing_bytes = _read_automations()
+    if existing_bytes is None:
+        return jsonify({'error':
+            f'Cannot read {automations}. Refusing to deploy — writing now would '
+            f'discard every automation already in that file. Grant the service '
+            f'read access (see /etc/sudoers.d/aqualight).'}), 500
 
     try:
         summary, merged_bytes = _merge_automations(existing_bytes, yaml_content, prefix, state)
@@ -218,11 +242,10 @@ def get_ha_state():
     """
     prefix = request.args.get('prefix', '').strip()
     automations = os.path.join(HA_CONFIG, 'automations.yaml')
-    try:
-        result = subprocess.run(['sudo', 'cat', automations], capture_output=True, check=True)
-        existing_bytes = result.stdout
-    except Exception as e:
-        return jsonify({'exists': False, 'error': str(e)}), 200
+
+    existing_bytes = _read_automations()
+    if existing_bytes is None:
+        return jsonify({'exists': False, 'error': f'Cannot read {automations}'}), 200
 
     states = _extract_state_lines(existing_bytes)
     if not prefix:
