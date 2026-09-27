@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import urllib.request
 from datetime import date
@@ -24,6 +25,11 @@ MQTT_TOPIC      = os.environ.get('MQTT_TOPIC',      'chihiros/light/set')
 MQTT_TOPIC_NANO = os.environ.get('MQTT_TOPIC_NANO', 'chihiros/nano/light/set')
 SPOT_ENTITY     = os.environ.get('SPOT_ENTITY',     'light.aquarium_spotlight')
 PRESETS_DIR     = os.environ.get('PRESETS_DIR',     os.path.join(os.path.dirname(__file__), 'presets'))
+
+# Full path to the automations file. Defaults to <HA_CONFIG>/automations.yaml,
+# so the production value is unchanged; dev runs point it at a scratch copy.
+AUTOMATIONS_PATH = os.environ.get('AUTOMATIONS_PATH', os.path.join(HA_CONFIG, 'automations.yaml'))
+BACKUP_DIR       = os.path.dirname(AUTOMATIONS_PATH)
 
 # ── Static serving ─────────────────────────────────────────────────────────────
 
@@ -92,13 +98,23 @@ def _prepend_state_line(text: bytes, prefix: str, state: dict, existing_states: 
     return b''.join(lines) + text
 
 
+def _writable_directly(path: str) -> bool:
+    """
+    True when this process can write `path` without sudo. False for the
+    root-owned production automations.yaml, which keeps the sudo path.
+    """
+    if os.path.exists(path):
+        return os.access(path, os.W_OK)
+    return os.access(os.path.dirname(path) or '.', os.W_OK)
+
+
 def _read_automations() -> bytes | None:
     """
     Read automations.yaml. Returns b'' if the file genuinely doesn't exist yet,
     or None if it exists but can't be read — callers must NOT treat None as
     empty, or a deploy would overwrite every other automation in the file.
     """
-    path = os.path.join(HA_CONFIG, 'automations.yaml')
+    path = AUTOMATIONS_PATH
     try:
         with open(path, 'rb') as f:
             return f.read()
@@ -184,9 +200,9 @@ def deploy():
     if prefix not in KNOWN_PREFIXES:
         return jsonify({'error': f"Unknown prefix '{prefix}'. Must be one of: {KNOWN_PREFIXES}"}), 400
 
-    automations = os.path.join(HA_CONFIG, 'automations.yaml')
+    automations = AUTOMATIONS_PATH
     iso    = date.today().isoformat()
-    backup = os.path.join(HA_CONFIG, f'automations_{iso}.yaml.bak')
+    backup = os.path.join(BACKUP_DIR, f'automations_{iso}.yaml.bak')
 
     existing_bytes = _read_automations()
     if existing_bytes is None:
@@ -203,24 +219,39 @@ def deploy():
     if dry_run:
         return jsonify({'dry_run': True, **summary})
 
-    # Backup before writing
+    # Backup before writing. A dev scratch file this user owns is written
+    # directly; the root-owned production file keeps the sudo path unchanged.
+    direct = _writable_directly(automations)
+
     try:
-        subprocess.run(['sudo', 'cp', automations, backup], check=True, capture_output=True)
-        baks = sorted(glob.glob(os.path.join(HA_CONFIG, 'automations_*.yaml.bak')), reverse=True)
+        if direct:
+            shutil.copy2(automations, backup)
+        else:
+            subprocess.run(['sudo', 'cp', automations, backup], check=True, capture_output=True)
+        baks = sorted(glob.glob(os.path.join(BACKUP_DIR, 'automations_*.yaml.bak')), reverse=True)
         for old in baks[5:]:
-            subprocess.run(['sudo', 'rm', old], capture_output=True)
-    except subprocess.CalledProcessError:
+            if direct:
+                os.remove(old)
+            else:
+                subprocess.run(['sudo', 'rm', old], capture_output=True)
+    except (subprocess.CalledProcessError, OSError):
         pass
 
     try:
-        subprocess.run(
-            ['sudo', 'tee', automations],
-            input=merged_bytes,
-            capture_output=True,
-            check=True,
-        )
+        if direct:
+            with open(automations, 'wb') as f:
+                f.write(merged_bytes)
+        else:
+            subprocess.run(
+                ['sudo', 'tee', automations],
+                input=merged_bytes,
+                capture_output=True,
+                check=True,
+            )
     except subprocess.CalledProcessError as e:
         return jsonify({'error': f'Write failed: {e.stderr.decode()}'}), 500
+    except OSError as e:
+        return jsonify({'error': f'Write failed: {e}'}), 500
 
     return jsonify({'success': True, 'backup': backup, **summary, 'reload': _reload_ha()})
 
@@ -244,7 +275,7 @@ def get_ha_state():
       prefix — 'aquarium_' or 'nano_'; if omitted, returns all found.
     """
     prefix = request.args.get('prefix', '').strip()
-    automations = os.path.join(HA_CONFIG, 'automations.yaml')
+    automations = AUTOMATIONS_PATH
 
     existing_bytes = _read_automations()
     if existing_bytes is None:
