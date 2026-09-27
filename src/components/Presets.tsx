@@ -8,7 +8,7 @@ interface PresetListEntry {
 }
 
 interface Props {
-  device: 'biotope' | 'nano'
+  device: string
   currentState: unknown
   source: 'local' | 'ha' | 'offline'
   onLoad: (state: Record<string, unknown>) => void

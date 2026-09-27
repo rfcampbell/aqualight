@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import type { ScheduleState } from '../types'
-import { BIOTOPE_LIGHT_CONFIG, type LightConfig } from '../utils/generateYaml'
+import type { ScheduleState, SiestaLight, LightConfig } from '../types'
 import s from './DeviceTest.module.css'
 
 interface Props {
+  light: SiestaLight
   schedule: ScheduleState
 }
 
@@ -15,8 +15,6 @@ interface DeviceState {
 }
 
 const FLASH_MS = 3000
-
-const WRGB_CFG: LightConfig = BIOTOPE_LIGHT_CONFIG
 
 async function callTestLight(entityId: string, state: 'ON' | 'OFF', brightnessPct?: number) {
   const res = await fetch('/api/test/light', {
@@ -35,7 +33,8 @@ function transportLabel(cfg: LightConfig): string {
   }
 }
 
-export default function DeviceTest({ schedule }: Props) {
+export default function DeviceTest({ light, schedule }: Props) {
+  const WRGB_CFG = light.transport
   const [wrgb, setWrgb] = useState<DeviceState>({ status: 'idle', message: '' })
   const [spot, setSpot] = useState<DeviceState>({ status: 'idle', message: '' })
 
@@ -169,8 +168,11 @@ export default function DeviceTest({ schedule }: Props) {
           <StatusBadge state={wrgb} />
         </div>
 
-        {/* Spotlight */}
-        <div className={s.device}>
+        {/* Spotlight — only for a light that has one.
+            NOTE: /api/test/spotlight targets the backend's SPOT_ENTITY, not
+            light.spotlight.entityId. Fine while exactly one light has a
+            spotlight; move the entity into the request when a second does. */}
+        {light.spotlight && <div className={s.device}>
           <div className={s.deviceHeader}>
             <span className={s.deviceLabel}>Spotlight</span>
             <span className={s.deviceMeta}>HA API · {schedule.spotlightBrightness}%</span>
@@ -201,7 +203,7 @@ export default function DeviceTest({ schedule }: Props) {
             </button>
           </div>
           <StatusBadge state={spot} />
-        </div>
+        </div>}
       </div>
     </div>
   )

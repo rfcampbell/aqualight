@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ScheduleState, NanoScheduleState } from './types'
+import type { ScheduleState, NanoScheduleState, Light, SiestaLight, RampLight } from './types'
 import Timeline from './components/Timeline'
 import CycleControls from './components/CycleControls'
 import ChannelEditor from './components/ChannelEditor'
@@ -10,96 +10,77 @@ import DeviceTest from './components/DeviceTest'
 import NanoEditor from './components/NanoEditor'
 import NanoDeviceTest from './components/NanoDeviceTest'
 import Presets from './components/Presets'
-import { loadDefaults } from './components/ChannelEditor'
-import { generateYaml, generateNanoYaml } from './utils/generateYaml'
+import { LIGHTS } from './lights'
+import { loadStored, saveStored } from './utils/lightStorage'
+import { generateLightYaml } from './utils/generateYaml'
 import './App.css'
 
-const DEFAULT_SCHEDULE: ScheduleState = {
-  sunrise: { startMinute: 345, durationMinutes: 15, steps: 3 },
-  sunset:  { startMinute: 1020, durationMinutes: 15, steps: 3 },
-  cycle: {
-    wrgbDuration: 40, spotlightDuration: 20, overlapMinutes: 2,
-    cycleStart: 360, cycleEnd: 1020,
-  },
-  wrgbChannels:        { r: 40, g: 40, b: 40, w: 50 },
-  spotlightBrightness: 30,
-  ppfdWrgb:            120,
-  ppfdSpotlight:       80,
-}
-
-const DEFAULT_NANO: NanoScheduleState = {
-  rampUpStart:  420,   // 07:00
-  peakStart:    540,   // 09:00
-  peakEnd:      1080,  // 18:00
-  rampDownEnd:  1200,  // 20:00
-  peakRgbw:     { r: 40, g: 40, b: 45, w: 55 },
-  stepMinutes:  5,
-}
-
-function loadNanoDefaults(): NanoScheduleState | null {
-  try {
-    const raw = localStorage.getItem('aqualight_nano')
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
-}
-
-function saveNanoDefaults(s: NanoScheduleState) {
-  localStorage.setItem('aqualight_nano', JSON.stringify(s))
-}
-
-type Device = 'biotope' | 'nano'
-
 type HydrateSource = 'local' | 'ha' | 'offline'
+type AnyState = ScheduleState | NanoScheduleState
+
+/** Defaults from the registry, overlaid with whatever this browser has saved. */
+function initialState(light: Light): AnyState {
+  const saved = loadStored(light)
+  return { ...light.defaults, ...(saved ?? {}) } as AnyState
+}
 
 export default function App() {
-  const [device, setDevice]     = useState<Device>('biotope')
-  const [schedule, setSchedule] = useState<ScheduleState>(() => {
-    const saved = loadDefaults()
-    return saved ? { ...DEFAULT_SCHEDULE, ...saved } : DEFAULT_SCHEDULE
-  })
-  const [nano, setNano] = useState<NanoScheduleState>(() => loadNanoDefaults() ?? DEFAULT_NANO)
-  const [bioSource, setBioSource]   = useState<HydrateSource>('local')
-  const [nanoSource, setNanoSource] = useState<HydrateSource>('local')
+  const [activeId, setActiveId] = useState<string>(LIGHTS[0].id)
 
-  // On mount, hydrate from HA if it has an embedded snapshot for each device.
+  const [states, setStates] = useState<Record<string, AnyState>>(() =>
+    Object.fromEntries(LIGHTS.map(l => [l.id, initialState(l)])),
+  )
+  const [sources, setSources] = useState<Record<string, HydrateSource>>(() =>
+    Object.fromEntries(LIGHTS.map(l => [l.id, 'local' as HydrateSource])),
+  )
+
+  // On mount, hydrate each light from the snapshot HA's automations.yaml carries.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      try {
-        const [bioRes, nanoRes] = await Promise.all([
-          fetch('/api/ha/state?prefix=aquarium_').then(r => r.json()).catch(() => null),
-          fetch('/api/ha/state?prefix=nano_').then(r => r.json()).catch(() => null),
-        ])
-        if (cancelled) return
-        // Both requests dead means the API isn't reachable at all — say so
-        // rather than silently falling back to local defaults.
-        if (bioRes === null && nanoRes === null) {
-          setBioSource('offline')
-          setNanoSource('offline')
-          return
-        }
-        if (bioRes?.exists && bioRes.state) {
-          setSchedule({ ...DEFAULT_SCHEDULE, ...(bioRes.state as ScheduleState) })
-          setBioSource('ha')
-        }
-        if (nanoRes?.exists && nanoRes.state) {
-          setNano({ ...DEFAULT_NANO, ...(nanoRes.state as NanoScheduleState) })
-          setNanoSource('ha')
-        }
-      } catch {
-        if (!cancelled) { setBioSource('offline'); setNanoSource('offline') }
+      const results = await Promise.all(LIGHTS.map(l =>
+        fetch(`/api/ha/state?prefix=${encodeURIComponent(l.prefix)}`)
+          .then(r => r.json())
+          .catch(() => null),
+      ))
+      if (cancelled) return
+
+      // Every request dead means the API isn't reachable at all — say so rather
+      // than silently showing local defaults as though they came from HA.
+      if (results.every(r => r === null)) {
+        setSources(Object.fromEntries(LIGHTS.map(l => [l.id, 'offline' as HydrateSource])))
+        return
       }
+
+      const nextStates: Record<string, AnyState> = {}
+      const nextSources: Record<string, HydrateSource> = {}
+      LIGHTS.forEach((light, i) => {
+        const res = results[i]
+        if (res?.exists && res.state) {
+          nextStates[light.id]  = { ...light.defaults, ...(res.state as object) } as AnyState
+          nextSources[light.id] = 'ha'
+        } else if (res === null) {
+          nextSources[light.id] = 'offline'
+        }
+      })
+      if (Object.keys(nextStates).length)  setStates(s => ({ ...s, ...nextStates }))
+      if (Object.keys(nextSources).length) setSources(s => ({ ...s, ...nextSources }))
     })()
     return () => { cancelled = true }
   }, [])
 
-  function handleNanoChange(s: NanoScheduleState) {
-    setNano(s)
-    saveNanoDefaults(s)
+  const active = LIGHTS.find(l => l.id === activeId) ?? LIGHTS[0]
+
+  function update(light: Light, next: AnyState, persist = false) {
+    setStates(s => ({ ...s, [light.id]: next }))
+    if (persist) saveStored(light, next as unknown as Record<string, unknown>)
   }
 
-  const bioYaml  = generateYaml(schedule)
-  const nanoYaml = generateNanoYaml(nano)
+  function handleLoadPreset(light: Light, loaded: Record<string, unknown>) {
+    const next = { ...light.defaults, ...loaded } as AnyState
+    update(light, next, light.scheduleKind === 'ramp')
+    setSources(s => ({ ...s, [light.id]: 'local' }))
+  }
 
   return (
     <div className="app">
@@ -112,78 +93,105 @@ export default function App() {
           <div className="app-subtitle">Chihiros Schedule Editor</div>
 
           <div className="device-tabs">
-            <button
-              className={`device-tab ${device === 'biotope' ? 'device-tab--active' : ''}`}
-              onClick={() => setDevice('biotope')}
-            >
-              100P Biotope
-            </button>
-            <button
-              className={`device-tab ${device === 'nano' ? 'device-tab--active' : ''}`}
-              onClick={() => setDevice('nano')}
-            >
-              WRGB II Pro <span className="device-tab-sub">UNS 45U</span>
-            </button>
+            {LIGHTS.map(light => (
+              <button
+                key={light.id}
+                className={`device-tab ${light.id === activeId ? 'device-tab--active' : ''}`}
+                onClick={() => setActiveId(light.id)}
+              >
+                {light.label}
+                {light.sublabel && <span className="device-tab-sub">{light.sublabel}</span>}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
       <main className="app-main">
-        {device === 'biotope' ? (
-          <>
-            <section className="section">
-              <Presets
-                device="biotope"
-                currentState={schedule}
-                source={bioSource}
-                onLoad={s => { setSchedule({ ...DEFAULT_SCHEDULE, ...s }); setBioSource('local') }}
-              />
-            </section>
+        <section className="section">
+          <Presets
+            device={active.presetId}
+            currentState={states[active.id]}
+            source={sources[active.id]}
+            onLoad={loaded => handleLoadPreset(active, loaded)}
+          />
+        </section>
 
-            <section className="section timeline-section">
-              <Timeline schedule={schedule} onChange={setSchedule} />
-            </section>
-
-            <section className="section two-col">
-              <div className="col-left">
-                <CycleControls schedule={schedule} onChange={setSchedule} />
-                <div className="spacer" />
-                <ChannelEditor schedule={schedule} onChange={setSchedule} />
-              </div>
-              <div className="col-right">
-                <PhotoperiodDisplay schedule={schedule} />
-                <div className="spacer" />
-                <ParDliEstimator schedule={schedule} onChange={setSchedule} />
-              </div>
-            </section>
-
-            <section className="section two-col" style={{ alignItems: 'start' }}>
-              <YamlPanel yaml={bioYaml} prefix="aquarium_" state={schedule} />
-              <DeviceTest schedule={schedule} />
-            </section>
-          </>
-        ) : (
-          <>
-            <section className="section">
-              <Presets
-                device="nano"
-                currentState={nano}
-                source={nanoSource}
-                onLoad={s => { handleNanoChange({ ...DEFAULT_NANO, ...s }); setNanoSource('local') }}
-              />
-            </section>
-
-            <section className="section two-col" style={{ alignItems: 'start' }}>
-              <NanoEditor schedule={nano} onChange={handleNanoChange} />
-              <NanoDeviceTest schedule={nano} />
-            </section>
-
-            <section className="section">
-              <YamlPanel yaml={nanoYaml} prefix="nano_" state={nano} />
-            </section>
-          </>
-        )}
+        {active.scheduleKind === 'siesta'
+          ? <SiestaPanels
+              light={active as SiestaLight}
+              schedule={states[active.id] as ScheduleState}
+              onChange={next => update(active, next)}
+            />
+          : <RampPanels
+              light={active as RampLight}
+              schedule={states[active.id] as NanoScheduleState}
+              onChange={next => update(active, next, true)}
+            />}
       </main>
     </div>
+  )
+}
+
+function SiestaPanels({ light, schedule, onChange }: {
+  light: SiestaLight
+  schedule: ScheduleState
+  onChange: (s: ScheduleState) => void
+}) {
+  return (
+    <>
+      <section className="section timeline-section">
+        <Timeline schedule={schedule} onChange={onChange} />
+      </section>
+
+      <section className="section two-col">
+        <div className="col-left">
+          <CycleControls schedule={schedule} onChange={onChange} />
+          <div className="spacer" />
+          <ChannelEditor light={light} schedule={schedule} onChange={onChange} />
+        </div>
+        <div className="col-right">
+          <PhotoperiodDisplay schedule={schedule} />
+          {light.dli && (
+            <>
+              <div className="spacer" />
+              <ParDliEstimator schedule={schedule} onChange={onChange} />
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="section two-col" style={{ alignItems: 'start' }}>
+        <YamlPanel
+          yaml={generateLightYaml(light, schedule)}
+          prefix={light.prefix}
+          state={schedule}
+        />
+        <DeviceTest light={light} schedule={schedule} />
+      </section>
+    </>
+  )
+}
+
+function RampPanels({ light, schedule, onChange }: {
+  light: RampLight
+  schedule: NanoScheduleState
+  onChange: (s: NanoScheduleState) => void
+}) {
+  return (
+    <>
+      <section className="section two-col" style={{ alignItems: 'start' }}>
+        <NanoEditor light={light} schedule={schedule} onChange={onChange} />
+        <NanoDeviceTest light={light} schedule={schedule} />
+      </section>
+
+      <section className="section">
+        <YamlPanel
+          yaml={generateLightYaml(light, schedule)}
+          prefix={light.prefix}
+          state={schedule}
+        />
+      </section>
+    </>
   )
 }

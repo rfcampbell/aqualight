@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import type { NanoScheduleState } from '../types'
+import type { NanoScheduleState, RampLight } from '../types'
 import s from './NanoDeviceTest.module.css'
 
 interface Props {
+  light: RampLight
   schedule: NanoScheduleState
 }
 
@@ -10,7 +11,7 @@ type Status = 'idle' | 'busy' | 'ok' | 'error'
 
 const FLASH_MS = 3000
 
-export default function NanoDeviceTest({ schedule }: Props) {
+export default function NanoDeviceTest({ light, schedule }: Props) {
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState('')
 
@@ -20,7 +21,7 @@ export default function NanoDeviceTest({ schedule }: Props) {
     try {
       const { r, g, b, w } = schedule.peakRgbw
       const body = on ? { state: 'ON', r, g, b, w } : { state: 'OFF' }
-      const res  = await fetch('/api/test/nano', {
+      const res  = await fetch(light.mqttTestEndpoint ?? '/api/test/nano', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -55,8 +56,10 @@ export default function NanoDeviceTest({ schedule }: Props) {
 
       <div className={s.device}>
         <div className={s.deviceHeader}>
-          <span className={s.deviceLabel}>WRGB II Pro</span>
-          <span className={s.deviceMeta}>MQTT · chihiros/nano</span>
+          <span className={s.deviceLabel}>{light.label}</span>
+          <span className={s.deviceMeta}>
+            {light.transport.kind === 'mqtt' ? `MQTT · ${light.transport.topic}` : light.transport.kind}
+          </span>
         </div>
         <div className={s.colorPreview} style={{ background: previewColor }} />
         <div className={s.btnRow}>

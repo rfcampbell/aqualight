@@ -3,6 +3,34 @@
 Visual editor for Chihiros aquarium light schedules, generating Home Assistant
 `automations.yaml` entries. React / TypeScript / Vite frontend, Flask backend.
 
+## Lights
+
+Every light is one entry in a registry rather than a hardcoded branch:
+
+- `src/lights.ts` — the full typed registry (transport, schedule kind, header
+  strings, storage key, DLI, defaults). This is the file to edit.
+- `backend/lights.json` — only the identity the backend also needs (`id`,
+  `prefix`, `presetId`). `KNOWN_PREFIXES` and the valid preset devices derive
+  from it.
+- `src/__tests__/lights.test.ts` — fails if those two disagree.
+
+`prefix` is what the merge keys on: a deploy replaces exactly the entries whose
+id starts with the owning light's prefix and leaves every other entry alone.
+
+`scheduleKind` selects the state shape, the editor and the generator:
+
+| kind | shape | editor | generator |
+|------|-------|--------|-----------|
+| `siesta` | `ScheduleState` — cycling WRGB with optional spotlight fill | Timeline + CycleControls + ChannelEditor | `generateYaml` |
+| `ramp` | `NanoScheduleState` — one peak with sunrise/sunset ramps | NanoEditor | `generateNanoYaml` |
+
+`transport` selects the command emitter, shared across lights rather than
+duplicated per light: `light_entities` (four HA entities, `brightness_pct`),
+`mqtt` (flat 0-100 JSON via `mqtt.publish`), `ha_light` (one entity,
+`rgbw_color`).
+
+Adding a light means an entry in both files and nothing else.
+
 ## Development
 
 Production and dev run on the same host (robix). They are kept apart by port

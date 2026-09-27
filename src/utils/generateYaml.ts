@@ -1,41 +1,8 @@
-import type { ScheduleState, NanoScheduleState } from '../types'
+import type {
+  ScheduleState, NanoScheduleState, Light, SiestaLight, RampLight, LightConfig,
+} from '../types'
 
-// ── Light configuration ──────────────────────────────────────────────────────
-
-/**
- * Discriminated union of how a WRGB light's automations should be emitted.
- *
- * - `mqtt`: flat 0-100 channel payload via mqtt.publish. Used by the
- *   chihiros-mqtt bridge (nano, and the legacy 100P shape).
- * - `ha_light`: single HA light entity, rgbw_color 0-255. Useful for any
- *   integration that exposes one RGBW entity per lamp.
- * - `light_entities`: four HA light entities, one per RGBW channel, each
- *   driven with brightness_pct 0-100. Used by chihiros-led-control (HACS),
- *   which is what the 100P now uses via ESP32 Bluetooth Proxy.
- */
-export type LightConfig =
-  | { kind: 'mqtt';           entityId: string; topic: string }
-  | { kind: 'ha_light';       entityId: string }
-  | {
-      kind: 'light_entities'
-      entityIds: { red: string; green: string; blue: string; white: string }
-    }
-
-export const BIOTOPE_LIGHT_CONFIG: LightConfig = {
-  kind: 'light_entities',
-  entityIds: {
-    red:   'light.dywpr120fa39f25d91a7_red',
-    green: 'light.dywpr120fa39f25d91a7_green',
-    blue:  'light.dywpr120fa39f25d91a7_blue',
-    white: 'light.dywpr120fa39f25d91a7_white',
-  },
-}
-
-export const NANO_LIGHT_CONFIG: LightConfig = {
-  kind: 'mqtt',
-  entityId: 'light.chihiros_nano_wrgb',
-  topic:    'chihiros/nano/light/set',
-}
+export type { LightConfig }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,20 +36,12 @@ function lightDescription(cfg: LightConfig): string {
   }
 }
 
-// ── Automation builder ───────────────────────────────────────────────────────
-
-interface AutoAction {
-  wrgb?: { state: 'ON' | 'OFF'; r?: number; g?: number; b?: number; w?: number }
-  spot?: { state: 'ON' | 'OFF'; brightness?: number }
+function generatedAt(): string {
+  return new Date().toISOString().slice(0, 19).replace('T', ' ')
 }
 
-interface Auto {
-  id: string
-  alias: string
-  description: string
-  at: number  // minute of day
-  actions: AutoAction
-}
+// ── Channel emitters ─────────────────────────────────────────────────────────
+// One emitter per transport, shared by every light that declares it.
 
 function fmtWrgbAction(
   state: 'ON' | 'OFF',
@@ -142,30 +101,50 @@ function fmtWrgbAction(
   }
 }
 
-function fmtAuto(a: Auto, cfg: LightConfig): string {
-  const lines: string[] = [
-    `- id: '${a.id}'`,
-    `  alias: '${a.alias}'`,
-    `  description: '${a.description}'`,
+// ── Automation builder ───────────────────────────────────────────────────────
+
+interface AutoAction {
+  wrgb?: { state: 'ON' | 'OFF'; r?: number; g?: number; b?: number; w?: number }
+  spot?: { state: 'ON' | 'OFF'; brightness?: number }
+}
+
+interface Auto {
+  id: string
+  alias: string
+  description: string
+  at: number  // minute of day
+  actions: AutoAction
+}
+
+function autoHeader(id: string, alias: string, desc: string, at: number): string[] {
+  return [
+    `- id: '${id}'`,
+    `  alias: '${alias}'`,
+    `  description: '${desc}'`,
     `  mode: single`,
     `  trigger:`,
     `    - platform: time`,
-    `      at: '${toTime(a.at)}'`,
+    `      at: '${toTime(at)}'`,
     `  action:`,
   ]
+}
+
+function fmtAuto(a: Auto, light: SiestaLight): string {
+  const lines = autoHeader(a.id, a.alias, a.description, a.at)
 
   if (a.actions.wrgb) {
     const { state, r = 0, g = 0, b = 0, w = 0 } = a.actions.wrgb
-    lines.push(...fmtWrgbAction(state, r, g, b, w, cfg))
+    lines.push(...fmtWrgbAction(state, r, g, b, w, light.transport))
   }
 
-  if (a.actions.spot) {
+  // Skipped entirely for a light with no spotlight.
+  if (a.actions.spot && light.spotlight) {
     const { state, brightness = 100 } = a.actions.spot
     if (state === 'ON') {
       lines.push(
         `    - action: light.turn_on`,
         `      target:`,
-        `        entity_id: light.aquarium_spotlight`,
+        `        entity_id: ${light.spotlight.entityId}`,
         `      data:`,
         `        brightness_pct: ${brightness}`,
       )
@@ -173,7 +152,7 @@ function fmtAuto(a: Auto, cfg: LightConfig): string {
       lines.push(
         `    - action: light.turn_off`,
         `      target:`,
-        `        entity_id: light.aquarium_spotlight`,
+        `        entity_id: ${light.spotlight.entityId}`,
       )
     }
   }
@@ -181,11 +160,12 @@ function fmtAuto(a: Auto, cfg: LightConfig): string {
   return lines.join('\n')
 }
 
-// ── Main generator ───────────────────────────────────────────────────────────
+// ── Siesta generator (cycling WRGB with optional spotlight fill) ─────────────
 
-export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LIGHT_CONFIG): string {
+export function generateYaml(state: ScheduleState, light: SiestaLight): string {
   const { sunrise, sunset, cycle, wrgbChannels, spotlightBrightness } = state
   const { r, g, b, w } = wrgbChannels
+  const { prefix, aliasPrefix } = light
   const autos: Auto[] = []
 
   // ── Sunrise ramp: N steps, each at fraction of full channel values ─────────
@@ -193,8 +173,8 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
   for (let i = 1; i <= sunrise.steps; i++) {
     const frac = i / sunrise.steps
     autos.push({
-      id:          `aquarium_sunrise_step_${i}`,
-      alias:       `Aquarium — Sunrise ${i}/${sunrise.steps}`,
+      id:          `${prefix}sunrise_step_${i}`,
+      alias:       `${aliasPrefix} — Sunrise ${i}/${sunrise.steps}`,
       description: `WRGB to ${Math.round(frac * 100)}% (sunrise ramp)`,
       at:          sunrise.startMinute + (i - 1) * sunriseStepDur,
       actions: {
@@ -215,8 +195,8 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
       const isLastBlock = end >= cycle.cycleEnd
 
       autos.push({
-        id:          `aquarium_cycle_${cycleNum}_wrgb_on`,
-        alias:       `Aquarium — Cycle ${cycleNum} WRGB On`,
+        id:          `${prefix}cycle_${cycleNum}_wrgb_on`,
+        alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB On`,
         description: `Cycle ${cycleNum}: WRGB on, spotlight off`,
         at:          cursor,
         actions: {
@@ -227,8 +207,8 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
 
       if (overlapAt < end) {
         autos.push({
-          id:          `aquarium_cycle_${cycleNum}_overlap_start`,
-          alias:       `Aquarium — Cycle ${cycleNum} Spotlight Joins`,
+          id:          `${prefix}cycle_${cycleNum}_overlap_start`,
+          alias:       `${aliasPrefix} — Cycle ${cycleNum} Spotlight Joins`,
           description: `Cycle ${cycleNum}: spotlight on (${cycle.overlapMinutes}min overlap begins)`,
           at:          overlapAt,
           actions: { spot: { state: 'ON', brightness: spotlightBrightness } },
@@ -237,8 +217,8 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
 
       if (!isLastBlock) {
         autos.push({
-          id:          `aquarium_cycle_${cycleNum}_wrgb_off`,
-          alias:       `Aquarium — Cycle ${cycleNum} WRGB Off`,
+          id:          `${prefix}cycle_${cycleNum}_wrgb_off`,
+          alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB Off`,
           description: `Cycle ${cycleNum}: WRGB off, spotlight continues`,
           at:          end,
           actions: { wrgb: { state: 'OFF' } },
@@ -252,8 +232,8 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
 
       if (overlapAt < end) {
         autos.push({
-          id:          `aquarium_cycle_${cycleNum}_wrgb_returns`,
-          alias:       `Aquarium — Cycle ${cycleNum} WRGB Returns`,
+          id:          `${prefix}cycle_${cycleNum}_wrgb_returns`,
+          alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB Returns`,
           description: `Cycle ${cycleNum}: WRGB on (${cycle.overlapMinutes}min overlap begins)`,
           at:          overlapAt,
           actions: { wrgb: { state: 'ON', r, g, b, w } },
@@ -274,8 +254,8 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
     const frac = 1 - (i + 1) / sunset.steps
     const at   = sunset.startMinute + i * sunsetStepDur
     autos.push({
-      id:          `aquarium_sunset_step_${i + 1}`,
-      alias:       `Aquarium — Sunset ${i + 1}/${sunset.steps}`,
+      id:          `${prefix}sunset_step_${i + 1}`,
+      alias:       `${aliasPrefix} — Sunset ${i + 1}/${sunset.steps}`,
       description: `WRGB to ${Math.round(frac * 100)}% (sunset ramp)`,
       at,
       actions: frac > 0
@@ -286,8 +266,8 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
 
   // ── Final off ─────────────────────────────────────────────────────────────
   autos.push({
-    id:          'aquarium_lights_off',
-    alias:       'Aquarium — Lights Off',
+    id:          `${prefix}lights_off`,
+    alias:       `${aliasPrefix} — Lights Off`,
     description: 'All aquarium lights off for the night',
     at:          sunset.startMinute + sunset.durationMinutes,
     actions:     { wrgb: { state: 'OFF' }, spot: { state: 'OFF' } },
@@ -296,62 +276,45 @@ export function generateYaml(state: ScheduleState, cfg: LightConfig = BIOTOPE_LI
   // ── Sort and render ───────────────────────────────────────────────────────
   autos.sort((a, b) => a.at - b.at)
 
-  const header = [
-    `# AquaLight — Home Assistant automations`,
-    `# Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
+  const headerLines = [
+    `# ${light.header.title}`,
+    `# Generated: ${generatedAt()}`,
     `#`,
-    `# WRGB lamp  : ${lightDescription(cfg)}`,
-    `# Spotlight  : light.aquarium_spotlight`,
+    `# ${light.header.lampLabel}: ${lightDescription(light.transport)}`,
+  ]
+  if (light.spotlight) {
+    headerLines.push(`# Spotlight  : ${light.spotlight.entityId}`)
+  }
+  headerLines.push(
     `#`,
     `# Schedule   : Sunrise ${toTime(sunrise.startMinute)} (${sunrise.steps} steps, ${sunrise.durationMinutes}min)`,
     `#               Cycle ${toTime(cycle.cycleStart)}–${toTime(cycle.cycleEnd)} | WRGB ${cycle.wrgbDuration}min / Spotlight ${cycle.spotlightDuration}min / ${cycle.overlapMinutes}min overlap`,
     `#               Sunset ${toTime(sunset.startMinute)} (${sunset.steps} steps, ${sunset.durationMinutes}min)`,
     `#               Off at ${toTime(sunset.startMinute + sunset.durationMinutes)}`,
     ``,
-  ].join('\n')
+  )
 
-  return header + autos.map(a => fmtAuto(a, cfg)).join('\n\n') + '\n'
+  return headerLines.join('\n') + autos.map(a => fmtAuto(a, light)).join('\n\n') + '\n'
 }
 
-// ── Nano (Chihiros WRGB II Pro) ramp generator ───────────────────────────────
+// ── Ramp generator (single peak with sunrise/sunset ramps) ────────────────────
 
-function nanoAuto(
+function rampAuto(
   id: string, alias: string, desc: string, at: number,
+  state: 'ON' | 'OFF',
   r: number, g: number, b: number, w: number,
   cfg: LightConfig,
 ): string {
-  const header = [
-    `- id: '${id}'`,
-    `  alias: '${alias}'`,
-    `  description: '${desc}'`,
-    `  mode: single`,
-    `  trigger:`,
-    `    - platform: time`,
-    `      at: '${toTime(at)}'`,
-    `  action:`,
-  ]
-
-  return [...header, ...fmtWrgbAction('ON', r, g, b, w, cfg)].join('\n')
+  return [
+    ...autoHeader(id, alias, desc, at),
+    ...fmtWrgbAction(state, r, g, b, w, cfg),
+  ].join('\n')
 }
 
-function nanoOffAuto(id: string, alias: string, desc: string, at: number, cfg: LightConfig): string {
-  const header = [
-    `- id: '${id}'`,
-    `  alias: '${alias}'`,
-    `  description: '${desc}'`,
-    `  mode: single`,
-    `  trigger:`,
-    `    - platform: time`,
-    `      at: '${toTime(at)}'`,
-    `  action:`,
-  ]
-
-  return [...header, ...fmtWrgbAction('OFF', 0, 0, 0, 0, cfg)].join('\n')
-}
-
-export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NANO_LIGHT_CONFIG): string {
+export function generateNanoYaml(state: NanoScheduleState, light: RampLight): string {
   const { rampUpStart, peakStart, peakEnd, rampDownEnd, peakRgbw, stepMinutes } = state
   const { r, g, b, w } = peakRgbw
+  const { prefix, aliasPrefix, transport } = light
   const step = Math.max(1, stepMinutes)
   const autos: string[] = []
 
@@ -362,11 +325,11 @@ export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NA
     const frac = upSteps > 0 ? i / upSteps : 1
     if (frac === 0) continue
     const rv = clamp(r * frac), gv = clamp(g * frac), bv = clamp(b * frac), wv = clamp(w * frac)
-    autos.push(nanoAuto(
-      `nano_ramp_up_${pad(t / 60)}${pad(t % 60)}`,
-      `Nano — Ramp Up ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
+    autos.push(rampAuto(
+      `${prefix}ramp_up_${pad(t / 60)}${pad(t % 60)}`,
+      `${aliasPrefix} — Ramp Up ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
       `RGBW ${rv},${gv},${bv},${wv}`,
-      t, rv, gv, bv, wv, cfg,
+      t, 'ON', rv, gv, bv, wv, transport,
     ))
   }
 
@@ -379,27 +342,27 @@ export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NA
     const rv = clamp(r * frac), gv = clamp(g * frac), bv = clamp(b * frac), wv = clamp(w * frac)
 
     if (frac === 0) {
-      autos.push(nanoOffAuto(
-        `nano_ramp_down_${pad(t / 60)}${pad(t % 60)}`,
-        `Nano — Ramp Down ${toTime(t).slice(0, 5)} (0%)`,
+      autos.push(rampAuto(
+        `${prefix}ramp_down_${pad(t / 60)}${pad(t % 60)}`,
+        `${aliasPrefix} — Ramp Down ${toTime(t).slice(0, 5)} (0%)`,
         `RGBW off`,
-        t, cfg,
+        t, 'OFF', 0, 0, 0, 0, transport,
       ))
     } else {
-      autos.push(nanoAuto(
-        `nano_ramp_down_${pad(t / 60)}${pad(t % 60)}`,
-        `Nano — Ramp Down ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
+      autos.push(rampAuto(
+        `${prefix}ramp_down_${pad(t / 60)}${pad(t % 60)}`,
+        `${aliasPrefix} — Ramp Down ${toTime(t).slice(0, 5)} (${Math.round(frac * 100)}%)`,
         `RGBW ${rv},${gv},${bv},${wv}`,
-        t, rv, gv, bv, wv, cfg,
+        t, 'ON', rv, gv, bv, wv, transport,
       ))
     }
   }
 
   const header = [
-    `# AquaLight — Nano (Chihiros WRGB II Pro · UNS 45U) automations`,
-    `# Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`,
+    `# ${light.header.title}`,
+    `# Generated: ${generatedAt()}`,
     `#`,
-    `# WRGB II Pro : ${lightDescription(cfg)}`,
+    `# ${light.header.lampLabel}: ${lightDescription(transport)}`,
     `#`,
     `# Ramp up    : ${toTime(rampUpStart).slice(0, 5)} → ${toTime(peakStart).slice(0, 5)} (${step}min steps)`,
     `# Peak hold  : ${toTime(peakStart).slice(0, 5)} – ${toTime(peakEnd).slice(0, 5)} at R=${r} G=${g} B=${b} W=${w}`,
@@ -409,4 +372,13 @@ export function generateNanoYaml(state: NanoScheduleState, cfg: LightConfig = NA
   ].join('\n')
 
   return header + autos.join('\n\n') + '\n'
+}
+
+// ── Dispatcher ───────────────────────────────────────────────────────────────
+
+/** Generate a light's YAML using whichever generator its scheduleKind selects. */
+export function generateLightYaml(light: Light, state: unknown): string {
+  return light.scheduleKind === 'siesta'
+    ? generateYaml(state as ScheduleState, light)
+    : generateNanoYaml(state as NanoScheduleState, light)
 }

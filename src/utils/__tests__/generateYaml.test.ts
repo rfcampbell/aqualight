@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { generateYaml, generateNanoYaml, BIOTOPE_LIGHT_CONFIG, NANO_LIGHT_CONFIG } from '../generateYaml'
-import type { LightConfig } from '../generateYaml'
-import type { ScheduleState, NanoScheduleState } from '../../types'
+import { generateYaml, generateNanoYaml } from '../generateYaml'
+import { LIGHTS } from '../../lights'
+import type {
+  ScheduleState, NanoScheduleState, LightConfig, SiestaLight, RampLight,
+} from '../../types'
+
+// Identity comes from the registry; these tests vary only the transport.
+const BIOTOPE = LIGHTS.find(l => l.id === 'biotope') as SiestaLight
+const NANO    = LIGHTS.find(l => l.id === 'nano')    as RampLight
+
+function withTransport<T extends SiestaLight | RampLight>(light: T, transport: LightConfig): T {
+  return { ...light, transport }
+}
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +46,7 @@ const MQTT_CFG: LightConfig = {
 // ── generateYaml — light_entities mode (new 100P default) ─────────────────────
 
 describe('generateYaml — light_entities mode (default)', () => {
-  const yaml = generateYaml(SCHEDULE)
+  const yaml = generateYaml(SCHEDULE, BIOTOPE)
 
   it('emits four light.turn_on actions per WRGB-on automation', () => {
     // aquarium_cycle_1_wrgb_on with peak r=g=b=40, w=50
@@ -90,7 +100,7 @@ describe('generateYaml — light_entities mode (default)', () => {
   it('channel value of 0 → light.turn_off on that channel', () => {
     // Sunset step 3/3 is frac=0 which the generator converts to {state:"OFF"}.
     // Use a custom schedule whose peak has w=0 to exercise the per-channel zero path.
-    const zeroW = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 0 } })
+    const zeroW = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 0 } }, BIOTOPE)
     const block = zeroW.split('\n- id:').find(b => b.startsWith(" 'aquarium_cycle_1_wrgb_on'"))!
     // Three turn_ons (r,g,b) + one turn_off (w) for this WRGB-on block
     expect((block.match(/action: light\.turn_on/g) ?? []).length).toBe(3)
@@ -122,7 +132,7 @@ describe('generateYaml — light_entities mode (default)', () => {
 // ── generateYaml — mqtt mode (explicit) ───────────────────────────────────────
 
 describe('generateYaml — mqtt mode (explicit)', () => {
-  const yaml = generateYaml(SCHEDULE, MQTT_CFG)
+  const yaml = generateYaml(SCHEDULE, withTransport(BIOTOPE, MQTT_CFG))
 
   it('emits service: mqtt.publish for WRGB', () => {
     expect(yaml).toContain('service: mqtt.publish')
@@ -165,22 +175,22 @@ describe('generateYaml — mqtt mode (explicit)', () => {
 
 describe('generateYaml — mqtt payload peak scaling', () => {
   it('40% uniform peak → payload values are 40', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, MQTT_CFG)
+    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, withTransport(BIOTOPE, MQTT_CFG))
     expect(yaml).toContain('"red":40,"green":40,"blue":40,"white":40')
   })
 
   it('100% peak → payload values are 100', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 100, g: 100, b: 100, w: 100 } }, MQTT_CFG)
+    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 100, g: 100, b: 100, w: 100 } }, withTransport(BIOTOPE, MQTT_CFG))
     expect(yaml).toContain('"red":100,"green":100,"blue":100,"white":100')
   })
 
   it('sunrise step 1/3 at 40% uniform peak → values are 13 (1/3 of 40, rounded)', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, MQTT_CFG)
+    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, withTransport(BIOTOPE, MQTT_CFG))
     expect(yaml).toContain('"red":13,"green":13,"blue":13,"white":13')
   })
 
   it('sunrise step 3/3 equals peak value', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, MQTT_CFG)
+    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, withTransport(BIOTOPE, MQTT_CFG))
     const peakPayload = '"red":40,"green":40,"blue":40,"white":40'
     expect(yaml.split(peakPayload).length).toBeGreaterThan(2)
   })
@@ -190,7 +200,7 @@ describe('generateYaml — mqtt payload peak scaling', () => {
 
 describe('generateYaml — ha_light single-entity mode', () => {
   const cfg: LightConfig = { kind: 'ha_light', entityId: 'light.chihiros_wrgb' }
-  const yaml = generateYaml(SCHEDULE, cfg)
+  const yaml = generateYaml(SCHEDULE, withTransport(BIOTOPE, cfg))
 
   it('emits action: light.turn_on for ON states', () => {
     expect(yaml).toContain('action: light.turn_on')
@@ -233,7 +243,7 @@ describe('generateYaml — ha_light single-entity mode', () => {
 // ── generateNanoYaml — mqtt mode (default) ────────────────────────────────────
 
 describe('generateNanoYaml — mqtt mode (default)', () => {
-  const yaml = generateNanoYaml(NANO_SCHEDULE)
+  const yaml = generateNanoYaml(NANO_SCHEDULE, NANO)
 
   it('emits service: mqtt.publish', () => {
     expect(yaml).toContain('service: mqtt.publish')
@@ -263,7 +273,7 @@ describe('generateNanoYaml — mqtt mode (default)', () => {
 
 describe('generateNanoYaml — ha_light single-entity mode', () => {
   const cfg: LightConfig = { kind: 'ha_light', entityId: 'light.chihiros_nano_wrgb' }
-  const yaml = generateNanoYaml(NANO_SCHEDULE, cfg)
+  const yaml = generateNanoYaml(NANO_SCHEDULE, withTransport(NANO, cfg))
 
   it('emits action: light.turn_on for ramp steps', () => {
     expect(yaml).toContain('action: light.turn_on')
@@ -289,21 +299,21 @@ describe('generateNanoYaml — ha_light single-entity mode', () => {
 // ── Exported default configs ──────────────────────────────────────────────────
 
 describe('exported default configs', () => {
-  it('BIOTOPE_LIGHT_CONFIG uses light_entities (new HACS integration)', () => {
-    expect(BIOTOPE_LIGHT_CONFIG.kind).toBe('light_entities')
-    if (BIOTOPE_LIGHT_CONFIG.kind === 'light_entities') {
-      expect(BIOTOPE_LIGHT_CONFIG.entityIds.red).toBe('light.dywpr120fa39f25d91a7_red')
-      expect(BIOTOPE_LIGHT_CONFIG.entityIds.green).toBe('light.dywpr120fa39f25d91a7_green')
-      expect(BIOTOPE_LIGHT_CONFIG.entityIds.blue).toBe('light.dywpr120fa39f25d91a7_blue')
-      expect(BIOTOPE_LIGHT_CONFIG.entityIds.white).toBe('light.dywpr120fa39f25d91a7_white')
+  it('biotope uses light_entities (HACS integration)', () => {
+    expect(BIOTOPE.transport.kind).toBe('light_entities')
+    if (BIOTOPE.transport.kind === 'light_entities') {
+      expect(BIOTOPE.transport.entityIds.red).toBe('light.dywpr120fa39f25d91a7_red')
+      expect(BIOTOPE.transport.entityIds.green).toBe('light.dywpr120fa39f25d91a7_green')
+      expect(BIOTOPE.transport.entityIds.blue).toBe('light.dywpr120fa39f25d91a7_blue')
+      expect(BIOTOPE.transport.entityIds.white).toBe('light.dywpr120fa39f25d91a7_white')
     }
   })
 
-  it('NANO_LIGHT_CONFIG uses mqtt by default', () => {
-    expect(NANO_LIGHT_CONFIG.kind).toBe('mqtt')
-    if (NANO_LIGHT_CONFIG.kind === 'mqtt') {
-      expect(NANO_LIGHT_CONFIG.entityId).toBe('light.chihiros_nano_wrgb')
-      expect(NANO_LIGHT_CONFIG.topic).toBe('chihiros/nano/light/set')
+  it('nano uses mqtt', () => {
+    expect(NANO.transport.kind).toBe('mqtt')
+    if (NANO.transport.kind === 'mqtt') {
+      expect(NANO.transport.entityId).toBe('light.chihiros_nano_wrgb')
+      expect(NANO.transport.topic).toBe('chihiros/nano/light/set')
     }
   })
 })

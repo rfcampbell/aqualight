@@ -1,14 +1,15 @@
 import type { CSSProperties } from 'react'
-import type { NanoScheduleState, RgbwChannels } from '../types'
+import type { NanoScheduleState, RgbwChannels, RampLight } from '../types'
 import { minutesToHHMM, hhmmToMinutes } from '../utils/generateBlocks'
 import styles from './NanoEditor.module.css'
 
 interface Props {
+  light: RampLight
   schedule: NanoScheduleState
   onChange: (s: NanoScheduleState) => void
 }
 
-export default function NanoEditor({ schedule, onChange }: Props) {
+export default function NanoEditor({ light, schedule, onChange }: Props) {
   const { rampUpStart, peakStart, peakEnd, rampDownEnd, peakRgbw, stepMinutes } = schedule
 
   function setTime(field: 'rampUpStart' | 'peakStart' | 'peakEnd' | 'rampDownEnd', hhmm: string) {
@@ -27,8 +28,11 @@ export default function NanoEditor({ schedule, onChange }: Props) {
 
   return (
     <div className={styles.panel}>
-      <h3 className={styles.heading}>WRGB II Pro — Ramp Schedule</h3>
-      <p className={styles.hint}>UNS 45U · MQTT: chihiros/nano/light/set</p>
+      <h3 className={styles.heading}>{light.label} — Ramp Schedule</h3>
+      <p className={styles.hint}>
+        {[light.sublabel, light.transport.kind === 'mqtt' ? `MQTT: ${light.transport.topic}` : null]
+          .filter(Boolean).join(' · ')}
+      </p>
 
       <RampPreview schedule={schedule} />
 

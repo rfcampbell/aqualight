@@ -1,0 +1,7 @@
+{
+  "_comment": "Shared light identity. Only the fields BOTH the backend and the frontend need live here; the full typed registry is src/lights.ts, which imports this file and is checked against it by src/__tests__/lights.test.ts. The backend derives KNOWN_PREFIXES and the valid preset device ids from this file.",
+  "lights": [
+    { "id": "biotope", "prefix": "aquarium_", "presetId": "biotope" },
+    { "id": "nano",    "prefix": "nano_",     "presetId": "nano"    }
+  ]
+}

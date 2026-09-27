@@ -62,9 +62,20 @@ def _no_cache_api(resp):
         resp.headers['Cache-Control'] = 'no-store'
     return resp
 
-# ── Deploy ─────────────────────────────────────────────────────────────────────
+# ── Light registry ─────────────────────────────────────────────────────────────
 
-KNOWN_PREFIXES = ['aquarium_', 'nano_']
+# Identity shared with the frontend. src/lights.ts holds the full typed
+# registry and imports this same file; the two are checked against each other
+# by src/__tests__/lights.test.ts, so adding a light means editing both.
+LIGHTS_PATH = os.environ.get('LIGHTS_PATH', os.path.join(os.path.dirname(__file__), 'lights.json'))
+
+with open(LIGHTS_PATH) as _f:
+    LIGHTS = json.load(_f)['lights']
+
+KNOWN_PREFIXES = [light['prefix'] for light in LIGHTS]
+PRESET_DEVICES = sorted(light['presetId'] for light in LIGHTS)
+
+# ── Deploy ─────────────────────────────────────────────────────────────────────
 
 # State comment marker. One line per prefix, kept at the top of automations.yaml.
 # Format: # AQUALIGHT_STATE:{prefix}={compact json}
@@ -333,8 +344,8 @@ def save_preset():
 
     if not _NAME_RE.match(name):
         return jsonify({'error': 'Invalid name (letters, digits, space, - and _ only; max 64 chars)'}), 400
-    if device not in ('biotope', 'nano'):
-        return jsonify({'error': "device must be 'biotope' or 'nano'"}), 400
+    if device not in PRESET_DEVICES:
+        return jsonify({'error': f'device must be one of: {PRESET_DEVICES}'}), 400
     if not isinstance(state, dict):
         return jsonify({'error': 'state must be an object'}), 400
 
