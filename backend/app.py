@@ -149,6 +149,9 @@ def _merge_automations(
     """
     ryaml = YAML()
     ryaml.preserve_quotes = True
+    # Default width (80) re-folds long block scalars, which rewrites entries we
+    # don't own — HA's Jinja templates in particular. Wide enough to never fold.
+    ryaml.width = 4096
 
     prior_states = _extract_state_lines(existing_bytes)
     stripped = _strip_state_lines(existing_bytes)
