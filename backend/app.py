@@ -75,6 +75,11 @@ with open(LIGHTS_PATH) as _f:
 KNOWN_PREFIXES = [light['prefix'] for light in LIGHTS]
 PRESET_DEVICES = sorted(light['presetId'] for light in LIGHTS)
 
+# Lights whose registry entry still carries placeholder entity ids. Deploying
+# one would write automations commanding entities that do not exist, and HA
+# fails those at run time in a way nothing watches.
+PLACEHOLDER_PREFIXES = {light['prefix'] for light in LIGHTS if light.get('placeholder')}
+
 # ── Deploy ─────────────────────────────────────────────────────────────────────
 
 # State comment marker. One line per prefix, kept at the top of automations.yaml.
@@ -213,6 +218,13 @@ def deploy():
         return jsonify({'error': 'No YAML provided'}), 400
     if prefix not in KNOWN_PREFIXES:
         return jsonify({'error': f"Unknown prefix '{prefix}'. Must be one of: {KNOWN_PREFIXES}"}), 400
+    if prefix in PLACEHOLDER_PREFIXES:
+        light = next(l for l in LIGHTS if l['prefix'] == prefix)
+        return jsonify({'error':
+            f"Refusing to deploy '{light['id']}': its registry entry is still marked "
+            f"placeholder. The entity ids in src/lights.ts are invented, so these "
+            f"automations would command entities that do not exist. Replace them with "
+            f"the real ids, drop \"placeholder\" from backend/lights.json, and retry."}), 400
 
     automations = AUTOMATIONS_PATH
     iso    = date.today().isoformat()

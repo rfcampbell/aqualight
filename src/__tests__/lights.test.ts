@@ -55,6 +55,14 @@ describe('light registry', () => {
     expect(lightById('biotope')!.dli?.todo).toBeUndefined()
   })
 
+  it('marks the display placeholder so the backend refuses to deploy it', () => {
+    expect(lightById('display')!.placeholder).toBe(true)
+    expect(lightById('biotope')!.placeholder).toBeUndefined()
+    expect(lightById('nano')!.placeholder).toBeUndefined()
+    // The flag must reach the backend, which is what actually enforces it.
+    expect(SHARED_LIGHTS.find(l => l.id === 'display')!.placeholder).toBe(true)
+  })
+
   it('has the display light on the nano ramp shape with no spotlight', () => {
     const d = lightById('display')!
     expect(d.scheduleKind).toBe('ramp')

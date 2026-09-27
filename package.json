@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "npm run build && sudo rsync -a dist/ /var/www/aqualight/dist/ && sudo rsync -a backend/ /var/www/aqualight/backend/ && sudo systemctl restart aqualight"
+    "deploy": "npm run build && rsync -a --delete dist/ /var/www/aqualight/dist/ && rsync -a backend/ /var/www/aqualight/backend/ && sudo systemctl restart aqualight"
   },
   "dependencies": {
     "react": "^19.2.4",

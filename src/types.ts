@@ -99,6 +99,12 @@ interface LightBase {
   /** Endpoint for the live device test, when the transport needs a dedicated one. */
   mqttTestEndpoint?: string
   /**
+   * True while the entry still carries placeholder entity ids. The backend
+   * refuses to deploy such a light: its YAML would command entities that do
+   * not exist, and the failure would be silent in HA.
+   */
+  placeholder?: boolean
+  /**
    * PAR/DLI parameters. Optional: a light can be in the registry before its
    * output has been measured. Only siesta lights currently surface an
    * estimator in the UI, because NanoScheduleState carries no ppfd fields.

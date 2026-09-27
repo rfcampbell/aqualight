@@ -123,8 +123,9 @@ const DISPLAY: RampLight = {
     title:     'AquaLight — Display (Chihiros WRGB II Pro 90) automations',
     lampLabel: 'WRGB II Pro ',
   },
-  storage: { key: 'aqualight_display' },
-  dli:     DISPLAY_DLI,
+  storage:     { key: 'aqualight_display' },
+  dli:         DISPLAY_DLI,
+  placeholder: true,   // entity ids are not real yet; deploys are refused
   defaults: {
     rampUpStart: 420,   // 07:00  TODO placeholder
     peakStart:   540,   // 09:00  TODO placeholder
@@ -144,8 +145,9 @@ export function lightById(id: string): Light | undefined {
 }
 
 /** Identity as the backend sees it. Compared against LIGHTS in the tests. */
-export const SHARED_LIGHTS: Array<{ id: string; prefix: string; presetId: string }> =
-  shared.lights
+export const SHARED_LIGHTS: Array<{
+  id: string; prefix: string; presetId: string; placeholder?: boolean
+}> = shared.lights
 
 /**
  * Throws if src/lights.ts and backend/lights.json disagree. The backend
@@ -153,8 +155,10 @@ export const SHARED_LIGHTS: Array<{ id: string; prefix: string; presetId: string
  * offer a light whose deploy the backend rejects.
  */
 export function assertRegistryAgrees(): void {
-  const mine   = LIGHTS.map(l => `${l.id}|${l.prefix}|${l.presetId}`).sort()
-  const theirs = SHARED_LIGHTS.map(l => `${l.id}|${l.prefix}|${l.presetId}`).sort()
+  const key = (l: { id: string; prefix: string; presetId: string; placeholder?: boolean }) =>
+    `${l.id}|${l.prefix}|${l.presetId}|${l.placeholder ? 'placeholder' : 'live'}`
+  const mine   = LIGHTS.map(key).sort()
+  const theirs = SHARED_LIGHTS.map(key).sort()
   if (mine.length !== theirs.length || mine.some((m, i) => m !== theirs[i])) {
     throw new Error(
       'Light registry mismatch between src/lights.ts and backend/lights.json:\n' +
