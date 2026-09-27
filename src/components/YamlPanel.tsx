@@ -44,7 +44,7 @@ export default function YamlPanel({ yaml, prefix, state }: Props) {
       if (data.success) {
         const reloadNote = data.reload?.status === 'reloaded'
           ? 'Automations reloaded.'
-          : data.reload?.reason ?? 'Set HA_TOKEN to auto-reload.'
+          : `Not reloaded: ${data.reload?.reason ?? 'unknown reason'}`
         const mergeNote = `Kept ${data.kept}, removed ${data.removed}, added ${data.added}.`
         setDeployMsg(`Deployed. ${mergeNote} ${reloadNote}`)
         setDeploy('ok')

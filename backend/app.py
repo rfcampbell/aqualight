@@ -227,8 +227,11 @@ def deploy():
 
 def _reload_ha():
     if not HA_TOKEN:
-        return {'status': 'skipped', 'reason': 'HA_TOKEN not set'}
-    return _ha_call('POST', '/api/services/automation/reload', {})
+        return {'status': 'skipped', 'reason': 'HA_TOKEN not set — reload automations in HA manually'}
+    res = _ha_call('POST', '/api/services/automation/reload', {})
+    if res.get('ok'):
+        return {'status': 'reloaded'}
+    return {'status': 'error', 'reason': res.get('error', 'reload call failed')}
 
 
 # ── HA state read ──────────────────────────────────────────────────────────────
