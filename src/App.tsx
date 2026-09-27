@@ -49,7 +49,7 @@ function saveNanoDefaults(s: NanoScheduleState) {
 
 type Device = 'biotope' | 'nano'
 
-type HydrateSource = 'local' | 'ha'
+type HydrateSource = 'local' | 'ha' | 'offline'
 
 export default function App() {
   const [device, setDevice]     = useState<Device>('biotope')
@@ -71,6 +71,13 @@ export default function App() {
           fetch('/api/ha/state?prefix=nano_').then(r => r.json()).catch(() => null),
         ])
         if (cancelled) return
+        // Both requests dead means the API isn't reachable at all — say so
+        // rather than silently falling back to local defaults.
+        if (bioRes === null && nanoRes === null) {
+          setBioSource('offline')
+          setNanoSource('offline')
+          return
+        }
         if (bioRes?.exists && bioRes.state) {
           setSchedule({ ...DEFAULT_SCHEDULE, ...(bioRes.state as ScheduleState) })
           setBioSource('ha')
@@ -79,7 +86,9 @@ export default function App() {
           setNano({ ...DEFAULT_NANO, ...(nanoRes.state as NanoScheduleState) })
           setNanoSource('ha')
         }
-      } catch { /* backend offline — keep local defaults */ }
+      } catch {
+        if (!cancelled) { setBioSource('offline'); setNanoSource('offline') }
+      }
     })()
     return () => { cancelled = true }
   }, [])

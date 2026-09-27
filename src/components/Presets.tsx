@@ -10,7 +10,7 @@ interface PresetListEntry {
 interface Props {
   device: 'biotope' | 'nano'
   currentState: unknown
-  source: 'local' | 'ha'
+  source: 'local' | 'ha' | 'offline'
   onLoad: (state: Record<string, unknown>) => void
 }
 
@@ -107,8 +107,13 @@ export default function Presets({ device, currentState, source, onLoad }: Props)
   return (
     <div className={styles.panel}>
       <h3 className={styles.heading}>Presets</h3>
-      <span className={`${styles.source} ${source === 'ha' ? styles.source_ha : ''}`}>
-        {source === 'ha' ? '● loaded from HA' : '○ local defaults'}
+      <span
+        className={`${styles.source} ${source === 'ha' ? styles.source_ha : ''}`}
+        title={source === 'offline' ? 'No response from /api — check the backend URL' : undefined}
+      >
+        {source === 'ha'      ? '● loaded from HA'
+          : source === 'offline' ? '⚠ backend unreachable'
+          : '○ local defaults'}
       </span>
 
       <select
