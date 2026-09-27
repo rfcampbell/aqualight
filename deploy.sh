@@ -21,7 +21,7 @@ ssh "$REMOTE" bash <<'ENDSSH'
   set -e
 
   # Python deps
-  pip3 install -q flask
+  pip3 install -q -r /var/www/aqualight/backend/requirements.txt
 
   # Create .env if it doesn't exist (user fills in HA_TOKEN)
   if [ ! -f /var/www/aqualight/.env ]; then

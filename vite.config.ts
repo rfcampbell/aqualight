@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://localhost:5175',
+      // AQUALIGHT_API=http://aqualight.robix npm run dev  — to drive the real box
+      '/api': process.env.AQUALIGHT_API || 'http://localhost:5175',
     },
   },
   test: {
