@@ -14,8 +14,7 @@
     {
       "id": "display",
       "prefix": "display_",
-      "presetId": "display",
-      "placeholder": true
+      "presetId": "display"
     }
   ]
 }

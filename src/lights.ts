@@ -86,12 +86,9 @@ const NANO: RampLight = {
 }
 
 /**
- * Display — Chihiros WRGB II Pro 90. NOT YET DELIVERED.
+ * Display — Chihiros WRGB II Pro 90, paired in HA as DYWPRO90E2E042ECB9FB.
  *
- * TODO on arrival:
- *  - replace the placeholder entity ids with the real ones from
- *    chihiros-led-control (the 100P's are opaque device ids, e.g.
- *    light.dywpr120fa39f25d91a7_red, so expect the same shape, not display_*)
+ * TODO:
  *  - measure PPFD and replace DISPLAY_DLI
  *  - set real ramp waypoints; the times below are copied from the nano
  */
@@ -113,10 +110,10 @@ const DISPLAY: RampLight = {
   transport: {
     kind: 'light_entities',
     entityIds: {
-      red:   'light.display_red',    // TODO placeholder
-      green: 'light.display_green',  // TODO placeholder
-      blue:  'light.display_blue',   // TODO placeholder
-      white: 'light.display_white',  // TODO placeholder
+      red:   'light.dywpro90e2e042ecb9fb_red',
+      green: 'light.dywpro90e2e042ecb9fb_green',
+      blue:  'light.dywpro90e2e042ecb9fb_blue',
+      white: 'light.dywpro90e2e042ecb9fb_white',
     },
   },
   header: {
@@ -125,7 +122,6 @@ const DISPLAY: RampLight = {
   },
   storage:     { key: 'aqualight_display' },
   dli:         DISPLAY_DLI,
-  placeholder: true,   // entity ids are not real yet; deploys are refused
   defaults: {
     rampUpStart: 420,   // 07:00  TODO placeholder
     peakStart:   540,   // 09:00  TODO placeholder

@@ -31,15 +31,17 @@ duplicated per light: `light_entities` (four HA entities, `brightness_pct`),
 
 Adding a light means an entry in both files and nothing else.
 
-### Display (WRGB II Pro 90) — not yet installed
+### Display (WRGB II Pro 90) — wired, not yet tuned
 
-`display` is in the registry with placeholder entity ids, placeholder ramp
-waypoints and unmeasured DLI values, all marked `TODO` in `src/lights.ts`. Its
-`dli.todo` field is set so nothing mistakes the numbers for measurements. On
-arrival: replace the four `light.display_*` entity ids with the real ones from
-chihiros-led-control (expect opaque device ids like the 100P's
-`light.dywpr120fa39f25d91a7_red`, not `display_*`), set the real waypoints, and
-measure PPFD.
+`display` drives `light.dywpro90e2e042ecb9fb_{red,green,blue,white}` (paired in
+HA via chihiros-led-control as DYWPRO90E2E042ECB9FB). Its ramp waypoints are
+still copied from the nano and its DLI values are unmeasured, all marked `TODO`
+in `src/lights.ts`; `dli.todo` is set so nothing mistakes the numbers for
+measurements. Remaining: set the real waypoints and measure PPFD.
+
+A registry entry can carry `placeholder: true` (in `backend/lights.json`) while
+its entity ids are invented; the backend refuses to deploy it. No light is
+currently marked.
 
 ## Development
 

@@ -48,19 +48,27 @@ describe('light registry', () => {
   })
 
   it('marks placeholder DLI values as TODO so they cannot pass for measured', () => {
-    // The display lamp is not installed yet. Its numbers are invented, and
+    // The display lamp's PPFD is not measured yet. Its numbers are invented, and
     // anything reading them needs to be able to tell.
     const display = lightById('display')!
     expect(display.dli?.todo).toBeTruthy()
     expect(lightById('biotope')!.dli?.todo).toBeUndefined()
   })
 
-  it('marks the display placeholder so the backend refuses to deploy it', () => {
-    expect(lightById('display')!.placeholder).toBe(true)
-    expect(lightById('biotope')!.placeholder).toBeUndefined()
-    expect(lightById('nano')!.placeholder).toBeUndefined()
-    // The flag must reach the backend, which is what actually enforces it.
-    expect(SHARED_LIGHTS.find(l => l.id === 'display')!.placeholder).toBe(true)
+  it('wires the display to its real chihiros-led-control entities', () => {
+    const d = lightById('display')!
+    expect(d.transport).toEqual({
+      kind: 'light_entities',
+      entityIds: {
+        red:   'light.dywpro90e2e042ecb9fb_red',
+        green: 'light.dywpro90e2e042ecb9fb_green',
+        blue:  'light.dywpro90e2e042ecb9fb_blue',
+        white: 'light.dywpro90e2e042ecb9fb_white',
+      },
+    })
+    // No light is a placeholder any more, here or in the backend's copy.
+    for (const l of LIGHTS) expect(l.placeholder).toBeUndefined()
+    for (const l of SHARED_LIGHTS) expect(l.placeholder).toBeUndefined()
   })
 
   it('has the display light on the nano ramp shape with no spotlight', () => {
