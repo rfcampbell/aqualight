@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ScheduleState, SiestaLight, LightConfig } from '../types'
+import { callTestLight } from '../testLight'
 import s from './DeviceTest.module.css'
 
 interface Props {
@@ -15,15 +16,6 @@ interface DeviceState {
 }
 
 const FLASH_MS = 3000
-
-async function callTestLight(entityId: string, state: 'ON' | 'OFF', brightnessPct?: number) {
-  const res = await fetch('/api/test/light', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ entity_id: entityId, state, brightness_pct: brightnessPct }),
-  })
-  return res.json() as Promise<{ ok: boolean; error?: string }>
-}
 
 function transportLabel(cfg: LightConfig): string {
   switch (cfg.kind) {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { NanoScheduleState, RampLight } from '../types'
+import type { NanoScheduleState, RampLight, LightConfig } from '../types'
+import { sendRampTest } from '../testLight'
 import s from './NanoDeviceTest.module.css'
 
 interface Props {
@@ -11,6 +12,14 @@ type Status = 'idle' | 'busy' | 'ok' | 'error'
 
 const FLASH_MS = 3000
 
+function transportLabel(cfg: LightConfig): string {
+  switch (cfg.kind) {
+    case 'mqtt':           return `MQTT · ${cfg.topic}`
+    case 'ha_light':       return 'HA API · rgbw'
+    case 'light_entities': return 'HA API · per-channel'
+  }
+}
+
 export default function NanoDeviceTest({ light, schedule }: Props) {
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState('')
@@ -19,20 +28,14 @@ export default function NanoDeviceTest({ light, schedule }: Props) {
     setStatus('busy')
     setMessage('')
     try {
-      const { r, g, b, w } = schedule.peakRgbw
-      const body = on ? { state: 'ON', r, g, b, w } : { state: 'OFF' }
-      const res  = await fetch(light.mqttTestEndpoint ?? '/api/test/nano', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const json = await res.json()
-      if (json.ok) {
+      const result = await sendRampTest(light, schedule.peakRgbw, on)
+
+      if (result.ok) {
         setStatus('ok')
         setMessage(on ? 'Light on' : 'Light off')
       } else {
         setStatus('error')
-        setMessage(json.error ?? 'Unknown error')
+        setMessage(result.error ?? 'Unknown error')
       }
     } catch (e: unknown) {
       setStatus('error')
@@ -52,13 +55,13 @@ export default function NanoDeviceTest({ light, schedule }: Props) {
   return (
     <div className={s.panel}>
       <h3 className={s.heading}>Device Test</h3>
-      <p className={s.hint}>Send live commands to confirm the nano light is responding.</p>
+      <p className={s.hint}>Send live commands to confirm the {light.label} is responding.</p>
 
       <div className={s.device}>
         <div className={s.deviceHeader}>
           <span className={s.deviceLabel}>{light.label}</span>
           <span className={s.deviceMeta}>
-            {light.transport.kind === 'mqtt' ? `MQTT · ${light.transport.topic}` : light.transport.kind}
+            {transportLabel(light.transport)}
           </span>
         </div>
         <div className={s.colorPreview} style={{ background: previewColor }} />
