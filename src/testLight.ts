@@ -11,10 +11,12 @@ export async function callTestLight(entityId: string, state: 'ON' | 'OFF', brigh
 }
 
 type Result = { ok: boolean; error?: string }
+type Rgbw = { r: number; g: number; b: number; w: number }
 
 /** Send a ramp light's device test over whatever transport it actually uses. */
 export async function sendRampTest(
-  light: RampLight, rgbw: { r: number; g: number; b: number; w: number }, on: boolean,
+  light: RampLight, rgbw: Rgbw, on: boolean,
+  prev?: Rgbw,   // what the lamp already shows; per-channel lights then skip unchanged channels
 ): Promise<Result> {
   const { r, g, b, w } = rgbw
   const t = light.transport
@@ -32,10 +34,10 @@ export async function sendRampTest(
       return callTestLight(t.entityId, on ? 'ON' : 'OFF', on ? 100 : undefined)
     case 'light_entities': {
       const { red, green, blue, white } = t.entityIds
-      const results = await Promise.all(on
-        ? [callTestLight(red, 'ON', r), callTestLight(green, 'ON', g),
-           callTestLight(blue, 'ON', b), callTestLight(white, 'ON', w)]
-        : [red, green, blue, white].map(id => callTestLight(id, 'OFF')))
+      const ids = { r: red, g: green, b: blue, w: white }
+      const chans = (['r', 'g', 'b', 'w'] as const).filter(c => !on || !prev || prev[c] !== rgbw[c])
+      const results = await Promise.all(chans.map(c =>
+        on ? callTestLight(ids[c], 'ON', rgbw[c]) : callTestLight(ids[c], 'OFF')))
       return results.find(x => !x.ok) ?? { ok: true }
     }
   }

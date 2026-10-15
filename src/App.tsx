@@ -182,7 +182,7 @@ function RampPanels({ light, schedule, onChange }: {
     <>
       <section className="section two-col" style={{ alignItems: 'start' }}>
         <NanoEditor light={light} schedule={schedule} onChange={onChange} />
-        <NanoDeviceTest light={light} schedule={schedule} />
+        <NanoDeviceTest key={light.id} light={light} schedule={schedule} />
       </section>
 
       <section className="section">

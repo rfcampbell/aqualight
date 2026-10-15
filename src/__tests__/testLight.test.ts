@@ -51,3 +51,12 @@ describe('ramp device test', () => {
     expect(calls).toEqual([{ url: '/api/test/nano', body: { state: 'ON', ...RGBW } }])
   })
 })
+
+describe('ramp device test, live diffs', () => {
+  it('sends only the channels that changed on a per-channel light', async () => {
+    const calls = stubFetch()
+    await sendRampTest(lightById('display') as RampLight, { ...RGBW, b: 55 }, true, RGBW)
+    expect(calls).toEqual([{ url: '/api/test/light',
+      body: { entity_id: 'light.dywpro90e2e042ecb9fb_blue', state: 'ON', brightness_pct: 55 } }])
+  })
+})
