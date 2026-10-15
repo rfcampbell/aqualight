@@ -5,11 +5,12 @@ interface Props {
   yaml: string
   prefix: string
   state?: unknown  // embedded in HA automations.yaml so any browser can rehydrate
+  blockers?: string[]  // non-empty: the schedule is invalid and must not reach HA
 }
 
 type DeployState = 'idle' | 'deploying' | 'ok' | 'error'
 
-export default function YamlPanel({ yaml, prefix, state }: Props) {
+export default function YamlPanel({ yaml, prefix, state, blockers = [] }: Props) {
   const [copied, setCopied]         = useState(false)
   const [deploy, setDeploy]         = useState<DeployState>('idle')
   const [deployMsg, setDeployMsg]   = useState('')
@@ -32,6 +33,7 @@ export default function YamlPanel({ yaml, prefix, state }: Props) {
   }
 
   const handleDeploy = async () => {
+    if (blockers.length) return
     setDeploy('deploying')
     setDeployMsg('')
     try {
@@ -79,15 +81,23 @@ export default function YamlPanel({ yaml, prefix, state }: Props) {
           <button
             className={`${styles.btnDeploy} ${styles[`deploy_${deploy}`]}`}
             onClick={handleDeploy}
-            disabled={deploy === 'deploying'}
+            disabled={deploy === 'deploying' || blockers.length > 0}
+            title={blockers.length ? 'Fix the schedule problems first' : undefined}
           >
-            {deploy === 'deploying' ? 'Deploying…'
+            {blockers.length > 0 ? '⊘ Deploy blocked'
+              : deploy === 'deploying' ? 'Deploying…'
               : deploy === 'ok'    ? '✓ Deployed'
               : deploy === 'error' ? '✗ Failed'
               : '⬆ Deploy to robix'}
           </button>
         </div>
       </div>
+
+      {blockers.length > 0 && (
+        <div className={`${styles.deployMsg} ${styles.deployMsg_error}`} role="alert">
+          Refusing to deploy: {blockers.join(' ')}
+        </div>
+      )}
 
       {deployMsg && (
         <div className={`${styles.deployMsg} ${styles[`deployMsg_${deploy}`]}`}>

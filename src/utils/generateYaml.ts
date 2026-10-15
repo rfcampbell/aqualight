@@ -1,6 +1,7 @@
 import type {
   ScheduleState, NanoScheduleState, Light, SiestaLight, RampLight, LightConfig,
 } from '../types'
+import { modeOf, leadOf, tailOf, dayEnd } from './solid'
 
 export type { LightConfig }
 
@@ -183,69 +184,75 @@ export function generateYaml(state: ScheduleState, light: SiestaLight): string {
     })
   }
 
-  // ── Cycling transitions ───────────────────────────────────────────────────
-  let cursor = cycle.cycleStart
-  let isWrgb = true
-  let cycleNum = 1
+  const solid = modeOf(state) === 'solid'
 
-  while (cursor < cycle.cycleEnd) {
-    if (isWrgb) {
-      const end         = Math.min(cursor + cycle.wrgbDuration, cycle.cycleEnd)
-      const overlapAt   = Math.max(cursor, end - cycle.overlapMinutes)
-      const isLastBlock = end >= cycle.cycleEnd
+  if (solid) {
+    autos.push(...solidCore(state, light))
+  } else {
+    // ── Cycling transitions ───────────────────────────────────────────────────
+    let cursor = cycle.cycleStart
+    let isWrgb = true
+    let cycleNum = 1
 
-      autos.push({
-        id:          `${prefix}cycle_${cycleNum}_wrgb_on`,
-        alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB On`,
-        description: `Cycle ${cycleNum}: WRGB on, spotlight off`,
-        at:          cursor,
-        actions: {
-          wrgb: { state: 'ON', r, g, b, w },
-          spot: cycleNum > 1 ? { state: 'OFF' } : undefined,
-        },
-      })
+    while (cursor < cycle.cycleEnd) {
+      if (isWrgb) {
+        const end         = Math.min(cursor + cycle.wrgbDuration, cycle.cycleEnd)
+        const overlapAt   = Math.max(cursor, end - cycle.overlapMinutes)
+        const isLastBlock = end >= cycle.cycleEnd
 
-      if (overlapAt < end) {
         autos.push({
-          id:          `${prefix}cycle_${cycleNum}_overlap_start`,
-          alias:       `${aliasPrefix} — Cycle ${cycleNum} Spotlight Joins`,
-          description: `Cycle ${cycleNum}: spotlight on (${cycle.overlapMinutes}min overlap begins)`,
-          at:          overlapAt,
-          actions: { spot: { state: 'ON', brightness: spotlightBrightness } },
+          id:          `${prefix}cycle_${cycleNum}_wrgb_on`,
+          alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB On`,
+          description: `Cycle ${cycleNum}: WRGB on, spotlight off`,
+          at:          cursor,
+          actions: {
+            wrgb: { state: 'ON', r, g, b, w },
+            spot: cycleNum > 1 ? { state: 'OFF' } : undefined,
+          },
         })
+
+        if (overlapAt < end) {
+          autos.push({
+            id:          `${prefix}cycle_${cycleNum}_overlap_start`,
+            alias:       `${aliasPrefix} — Cycle ${cycleNum} Spotlight Joins`,
+            description: `Cycle ${cycleNum}: spotlight on (${cycle.overlapMinutes}min overlap begins)`,
+            at:          overlapAt,
+            actions: { spot: { state: 'ON', brightness: spotlightBrightness } },
+          })
+        }
+
+        if (!isLastBlock) {
+          autos.push({
+            id:          `${prefix}cycle_${cycleNum}_wrgb_off`,
+            alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB Off`,
+            description: `Cycle ${cycleNum}: WRGB off, spotlight continues`,
+            at:          end,
+            actions: { wrgb: { state: 'OFF' } },
+          })
+        }
+
+        cursor = end
+      } else {
+        const end        = Math.min(cursor + cycle.spotlightDuration, cycle.cycleEnd)
+        const overlapAt  = Math.max(cursor, end - cycle.overlapMinutes)
+
+        if (overlapAt < end) {
+          autos.push({
+            id:          `${prefix}cycle_${cycleNum}_wrgb_returns`,
+            alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB Returns`,
+            description: `Cycle ${cycleNum}: WRGB on (${cycle.overlapMinutes}min overlap begins)`,
+            at:          overlapAt,
+            actions: { wrgb: { state: 'ON', r, g, b, w } },
+          })
+        }
+
+        cursor = end
+        cycleNum++
       }
 
-      if (!isLastBlock) {
-        autos.push({
-          id:          `${prefix}cycle_${cycleNum}_wrgb_off`,
-          alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB Off`,
-          description: `Cycle ${cycleNum}: WRGB off, spotlight continues`,
-          at:          end,
-          actions: { wrgb: { state: 'OFF' } },
-        })
-      }
-
-      cursor = end
-    } else {
-      const end        = Math.min(cursor + cycle.spotlightDuration, cycle.cycleEnd)
-      const overlapAt  = Math.max(cursor, end - cycle.overlapMinutes)
-
-      if (overlapAt < end) {
-        autos.push({
-          id:          `${prefix}cycle_${cycleNum}_wrgb_returns`,
-          alias:       `${aliasPrefix} — Cycle ${cycleNum} WRGB Returns`,
-          description: `Cycle ${cycleNum}: WRGB on (${cycle.overlapMinutes}min overlap begins)`,
-          at:          overlapAt,
-          actions: { wrgb: { state: 'ON', r, g, b, w } },
-        })
-      }
-
-      cursor = end
-      cycleNum++
+      isWrgb = !isWrgb
+      if (cursor >= cycle.cycleEnd) break
     }
-
-    isWrgb = !isWrgb
-    if (cursor >= cycle.cycleEnd) break
   }
 
   // ── Sunset ramp: N steps stepping down ───────────────────────────────────
@@ -269,7 +276,7 @@ export function generateYaml(state: ScheduleState, light: SiestaLight): string {
     id:          `${prefix}lights_off`,
     alias:       `${aliasPrefix} — Lights Off`,
     description: 'All aquarium lights off for the night',
-    at:          sunset.startMinute + sunset.durationMinutes,
+    at:          dayEnd(state),
     actions:     { wrgb: { state: 'OFF' }, spot: { state: 'OFF' } },
   })
 
@@ -288,13 +295,50 @@ export function generateYaml(state: ScheduleState, light: SiestaLight): string {
   headerLines.push(
     `#`,
     `# Schedule   : Sunrise ${toTime(sunrise.startMinute)} (${sunrise.steps} steps, ${sunrise.durationMinutes}min)`,
-    `#               Cycle ${toTime(cycle.cycleStart)}–${toTime(cycle.cycleEnd)} | WRGB ${cycle.wrgbDuration}min / Spotlight ${cycle.spotlightDuration}min / ${cycle.overlapMinutes}min overlap`,
+    solid
+      ? `#               Core ${toTime(cycle.cycleStart)}–${toTime(sunset.startMinute)} | WRGB solid at R=${r} G=${g} B=${b} W=${w}`
+      : `#               Cycle ${toTime(cycle.cycleStart)}–${toTime(cycle.cycleEnd)} | WRGB ${cycle.wrgbDuration}min / Spotlight ${cycle.spotlightDuration}min / ${cycle.overlapMinutes}min overlap`,
     `#               Sunset ${toTime(sunset.startMinute)} (${sunset.steps} steps, ${sunset.durationMinutes}min)`,
-    `#               Off at ${toTime(sunset.startMinute + sunset.durationMinutes)}`,
+    ...(solid ? [
+      `#               Spotlight ${toTime(sunrise.startMinute - leadOf(state))}–${toTime(cycle.cycleStart)}` +
+        ` and ${toTime(sunset.startMinute)}–${toTime(dayEnd(state))}`,
+    ] : []),
+    `#               Off at ${toTime(dayEnd(state))}`,
     ``,
   )
 
   return headerLines.join('\n') + autos.map(a => fmtAuto(a, light)).join('\n\n') + '\n'
+}
+
+// ── Solid core: one continuous photoperiod, spotlight bracketing the ramps ────
+// The spotlight's last off is the lights-off automation, at the end of its tail.
+
+function solidCore(state: ScheduleState, light: SiestaLight): Auto[] {
+  const { sunrise, sunset, cycle, wrgbChannels: { r, g, b, w }, spotlightBrightness } = state
+  const { prefix, aliasPrefix } = light
+  return [
+    {
+      id:          `${prefix}spotlight_dawn_on`,
+      alias:       `${aliasPrefix} — Spotlight Dawn On`,
+      description: `Spotlight on ${leadOf(state)}min before sunrise`,
+      at:          sunrise.startMinute - leadOf(state),
+      actions:     { spot: { state: 'ON', brightness: spotlightBrightness } },
+    },
+    {
+      id:          `${prefix}core_on`,
+      alias:       `${aliasPrefix} — Core On`,
+      description: 'WRGB to full for the solid photoperiod, spotlight off',
+      at:          cycle.cycleStart,
+      actions:     { wrgb: { state: 'ON', r, g, b, w }, spot: { state: 'OFF' } },
+    },
+    {
+      id:          `${prefix}spotlight_dusk_on`,
+      alias:       `${aliasPrefix} — Spotlight Dusk On`,
+      description: `Spotlight on through the sunset ramp and ${tailOf(state)}min past it`,
+      at:          sunset.startMinute,
+      actions:     { spot: { state: 'ON', brightness: spotlightBrightness } },
+    },
+  ]
 }
 
 // ── Ramp generator (single peak with sunrise/sunset ramps) ────────────────────

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ScheduleState } from '../types'
 import { minutesToHHMM } from '../utils/generateBlocks'
+import { modeOf, leadOf, dayEnd, sunsetEnd, spotWindows, solidWrgbLevel } from '../utils/solid'
 import styles from './Timeline.module.css'
 
 interface Props {
@@ -16,6 +17,9 @@ const MARGIN = 20  // minutes of "off" buffer to show on each side
 // Spotlight arches are shifted back by overlapMinutes so the tails visually
 // overlap with the end of the preceding WRGB arch.
 function getArches(s: ScheduleState): { wrgb: [number, number][]; spot: [number, number][] } {
+  // Solid: the WRGB is drawn as a stepped plateau (solidPath), not arches.
+  if (modeOf(s) === 'solid') return { wrgb: [], spot: spotWindows(s) }
+
   const { sunrise, sunset, cycle } = s
   const { wrgbDuration, spotlightDuration, overlapMinutes, cycleStart, cycleEnd } = cycle
   const wrgb: [number, number][] = []
@@ -66,9 +70,33 @@ function archStroke(x0: number, x1: number, yPeak: number = 0): string {
   return `M ${x0},${VIEW_H} C ${x0 + s * 0.37},${yPeak} ${x1 - s * 0.37},${yPeak} ${x1},${VIEW_H}`
 }
 
+// Stepped plateau through the levels the solid automations actually set.
+function solidPath(s: ScheduleState, close: boolean): string {
+  const y = (lvl: number) => VIEW_H - lvl * VIEW_H
+  const { sunrise, sunset } = s
+  const edges = [
+    ...Array.from({ length: sunrise.steps }, (_, i) => sunrise.startMinute + i * sunrise.durationMinutes / sunrise.steps),
+    ...Array.from({ length: sunset.steps }, (_, i) => sunset.startMinute + i * sunset.durationMinutes / sunset.steps),
+  ]
+  let d = `M ${sunrise.startMinute},${VIEW_H}`
+  let lvl = 0
+  for (const x of edges) {
+    const next = solidWrgbLevel(s, x)
+    d += ` L ${x},${y(lvl)} L ${x},${y(next)}`
+    lvl = next
+  }
+  const end = sunsetEnd(s)
+  d += ` L ${end},${y(lvl)} L ${end},${VIEW_H}`
+  return close ? d + ' Z' : d
+}
+
 // ── Tooltip value at a minute ───────────────────────────────────────────────
 // Returns the sine amplitude (0–1) for each light at the given minute.
-function getActiveAt(arches: ReturnType<typeof getArches>, minute: number) {
+function getActiveAt(s: ScheduleState, arches: ReturnType<typeof getArches>, minute: number) {
+  if (modeOf(s) === 'solid') {
+    const lit = arches.spot.some(([a, b]) => minute >= a && minute < b)
+    return { wrgb: solidWrgbLevel(s, minute), spotlight: lit ? 1 : 0 }
+  }
   const sine = (arcs: [number, number][]) => {
     for (const [x0, x1] of arcs) {
       if (minute >= x0 && minute <= x1) {
@@ -100,8 +128,9 @@ export default function Timeline({ schedule, onChange }: Props) {
   })
 
   // Trimmed view window — show only active period + small margin
-  const xMin = Math.max(0, sunrise.startMinute - MARGIN)
-  const xMax = Math.min(1440, sunset.startMinute + sunset.durationMinutes + MARGIN)
+  const solid = modeOf(schedule) === 'solid'
+  const xMin = Math.max(0, sunrise.startMinute - (solid ? leadOf(schedule) : 0) - MARGIN)
+  const xMax = Math.min(1440, dayEnd(schedule) + MARGIN)
   const xRange = xMax - xMin
 
   // Convert a minute to a CSS left % within the trimmed window
@@ -148,7 +177,7 @@ export default function Timeline({ schedule, onChange }: Props) {
     const min = minuteFromEvent(e)
     const rect = wrapRef.current!.getBoundingClientRect()
     const pct = ((e.clientX - rect.left) / rect.width) * 100
-    const vals = getActiveAt(arches, min)
+    const vals = getActiveAt(schedule, arches, min)
     setTooltip({ minute: min, pct, ...vals })
   }
 
@@ -157,7 +186,8 @@ export default function Timeline({ schedule, onChange }: Props) {
 
   // Overlap zones: time intervals where a WRGB arch and a spotlight arch intersect
   const overlapZones: [number, number][] = []
-  for (const [wx0, wx1] of arches.wrgb) {
+  const wrgbSpans = solid ? [[sunrise.startMinute, sunsetEnd(schedule)] as [number, number]] : arches.wrgb
+  for (const [wx0, wx1] of wrgbSpans) {
     for (const [sx0, sx1] of arches.spot) {
       const lo = Math.max(wx0, sx0), hi = Math.min(wx1, sx1)
       if (hi > lo) overlapZones.push([lo, hi])
@@ -218,6 +248,14 @@ export default function Timeline({ schedule, onChange }: Props) {
             </g>
           ))}
 
+          {/* Solid WRGB plateau — in front */}
+          {solid && (
+            <g>
+              <path d={solidPath(schedule, true)}  fill="url(#wrgbGrad)" />
+              <path d={solidPath(schedule, false)} fill="none" stroke={topColor} strokeWidth="1.5" opacity="0.9" />
+            </g>
+          )}
+
           {/* WRGB arches — in front */}
           {arches.wrgb.map(([x0, x1], i) => (
             <g key={`wrgb-${i}`}>
@@ -249,8 +287,8 @@ export default function Timeline({ schedule, onChange }: Props) {
         <div className={styles.overlay}>
           <span className={styles.sunIcon} style={{ left: toPct(sunrise.startMinute) }}
             title={`Sunrise: ${minutesToHHMM(sunrise.startMinute)}`}>☀</span>
-          <span className={styles.moonIcon} style={{ left: toPct(sunset.startMinute + sunset.durationMinutes) }}
-            title={`Lights off: ${minutesToHHMM(sunset.startMinute + sunset.durationMinutes)}`}>☾</span>
+          <span className={styles.moonIcon} style={{ left: toPct(dayEnd(schedule)) }}
+            title={`Lights off: ${minutesToHHMM(dayEnd(schedule))}`}>☾</span>
 
           <div className={styles.dragHandle} style={{ left: toPct(sunrise.startMinute) }}
             title="Drag to adjust sunrise time"

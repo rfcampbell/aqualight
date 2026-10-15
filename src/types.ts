@@ -19,7 +19,15 @@ export interface CyclePattern {
   cycleEnd: number          // minute of day (default 1020 = 17:00)
 }
 
+/**
+ * siesta: WRGB cycles on/off with spotlight fill between.
+ * solid:  one continuous WRGB photoperiod; the spotlight only brackets the ramps.
+ * Absent means siesta, so state saved before solid mode existed loads unchanged.
+ */
+export type ScheduleMode = 'siesta' | 'solid'
+
 export interface ScheduleState {
+  mode?: ScheduleMode
   sunrise: RampConfig
   sunset: RampConfig
   cycle: CyclePattern
@@ -27,6 +35,19 @@ export interface ScheduleState {
   spotlightBrightness: number  // 0-255
   ppfdWrgb: number             // µmol/m²/s
   ppfdSpotlight: number        // µmol/m²/s
+  spotlightLeadMinutes?: number  // solid: spotlight on this long before sunrise (default 15)
+  spotlightTailMinutes?: number  // solid: spotlight off this long after sunset ends (default 15)
+}
+
+/** What switching a light into solid mode seeds. */
+export interface SolidDefaults {
+  sunrise: RampConfig
+  sunset: RampConfig
+  cycleStart: number
+  cycleEnd: number
+  wrgbChannels: RgbwChannels
+  spotlightLeadMinutes: number
+  spotlightTailMinutes: number
 }
 
 export interface NanoScheduleState {
@@ -115,6 +136,8 @@ interface LightBase {
 export interface SiestaLight extends LightBase {
   scheduleKind: 'siesta'
   defaults: ScheduleState
+  /** Present on lights that can run a solid photoperiod instead of siesta. */
+  solidDefaults?: SolidDefaults
   spotlight?: { entityId: string }
 }
 

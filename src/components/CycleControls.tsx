@@ -1,8 +1,10 @@
-import type { ScheduleState } from '../types'
+import type { ScheduleState, SiestaLight } from '../types'
 import { minutesToHHMM, hhmmToMinutes } from '../utils/generateBlocks'
+import { modeOf, leadOf, tailOf, switchMode, solidProblems } from '../utils/solid'
 import styles from './CycleControls.module.css'
 
 interface Props {
+  light: SiestaLight
   schedule: ScheduleState
   onChange: (s: ScheduleState) => void
 }
@@ -58,8 +60,10 @@ function TimePicker({
   )
 }
 
-export default function CycleControls({ schedule, onChange }: Props) {
+export default function CycleControls({ light, schedule, onChange }: Props) {
   const { cycle, sunrise, sunset } = schedule
+  const solid    = modeOf(schedule) === 'solid'
+  const problems = solidProblems(schedule)
 
   const updateCycle = (patch: Partial<typeof cycle>) =>
     onChange({ ...schedule, cycle: { ...cycle, ...patch } })
@@ -72,20 +76,47 @@ export default function CycleControls({ schedule, onChange }: Props) {
 
   return (
     <div className={styles.panel}>
-      <h3 className={styles.heading}>Cycle Pattern</h3>
+      <h3 className={styles.heading}>{solid ? 'Solid Day' : 'Cycle Pattern'}</h3>
+
+      {light.solidDefaults && (
+        <div className={styles.modeToggle} role="radiogroup" aria-label="Schedule mode">
+          {(['siesta', 'solid'] as const).map(m => (
+            <button key={m} role="radio" aria-checked={modeOf(schedule) === m}
+              className={modeOf(schedule) === m ? styles.modeActive : ''}
+              onClick={() => modeOf(schedule) !== m && onChange(switchMode(schedule, m, light))}>
+              {m === 'siesta' ? 'Siesta' : 'Solid'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {problems.length > 0 && (
+        <div className={styles.warning} role="alert">
+          <strong>Cannot deploy:</strong>
+          <ul>{problems.map(p => <li key={p}>{p}</li>)}</ul>
+        </div>
+      )}
 
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Timing</div>
-        <TimePicker label="Cycle Start" minuteOfDay={cycle.cycleStart} onChange={v => updateCycle({ cycleStart: v })} />
-        <TimePicker label="Cycle End" minuteOfDay={cycle.cycleEnd} onChange={v => updateCycle({ cycleEnd: v })} />
+        <TimePicker label={solid ? 'Core Start' : 'Cycle Start'} minuteOfDay={cycle.cycleStart} onChange={v => updateCycle({ cycleStart: v })} />
+        <TimePicker label={solid ? 'Core End' : 'Cycle End'} minuteOfDay={cycle.cycleEnd} onChange={v => updateCycle({ cycleEnd: v })} />
       </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>Durations</div>
-        <Stepper label="WRGB On" value={cycle.wrgbDuration} min={5} max={120} step={5} unit="min" onChange={v => updateCycle({ wrgbDuration: v })} />
-        <Stepper label="Spotlight On" value={cycle.spotlightDuration} min={5} max={120} step={5} unit="min" onChange={v => updateCycle({ spotlightDuration: v })} />
-        <Stepper label="Overlap" value={cycle.overlapMinutes} min={0} max={10} step={1} unit="min" onChange={v => updateCycle({ overlapMinutes: v })} />
-      </div>
+      {solid ? (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Spotlight</div>
+          <Stepper label="Before Sunrise" value={leadOf(schedule)} min={0} max={120} step={5} unit="min" onChange={v => onChange({ ...schedule, spotlightLeadMinutes: v })} />
+          <Stepper label="After Sunset" value={tailOf(schedule)} min={0} max={120} step={5} unit="min" onChange={v => onChange({ ...schedule, spotlightTailMinutes: v })} />
+        </div>
+      ) : (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Durations</div>
+          <Stepper label="WRGB On" value={cycle.wrgbDuration} min={5} max={120} step={5} unit="min" onChange={v => updateCycle({ wrgbDuration: v })} />
+          <Stepper label="Spotlight On" value={cycle.spotlightDuration} min={5} max={120} step={5} unit="min" onChange={v => updateCycle({ spotlightDuration: v })} />
+          <Stepper label="Overlap" value={cycle.overlapMinutes} min={0} max={10} step={1} unit="min" onChange={v => updateCycle({ overlapMinutes: v })} />
+        </div>
+      )}
 
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Sunrise Ramp</div>

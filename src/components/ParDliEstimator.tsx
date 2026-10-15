@@ -1,5 +1,6 @@
 import type { ScheduleState } from '../types'
 import { calcPhotoperiodMinutes } from '../utils/generateBlocks'
+import { modeOf, solidDliMinutes } from '../utils/solid'
 import styles from './ParDliEstimator.module.css'
 
 interface Props {
@@ -15,7 +16,11 @@ function dliQuality(dli: number): { label: string; className: string } {
 
 export default function ParDliEstimator({ schedule, onChange }: Props) {
   const { ppfdWrgb, ppfdSpotlight } = schedule
-  const { wrgbMinutes, spotlightMinutes } = calcPhotoperiodMinutes(schedule)
+  // Siesta counts ramps at full power, as it always has; solid counts each
+  // ramp step at its own level.
+  const { wrgbMinutes, spotlightMinutes } = modeOf(schedule) === 'solid'
+    ? solidDliMinutes(schedule)
+    : calcPhotoperiodMinutes(schedule)
 
   const dliWrgb = (ppfdWrgb * wrgbMinutes * 60) / 1_000_000
   const dliSpotlight = (ppfdSpotlight * spotlightMinutes * 60) / 1_000_000

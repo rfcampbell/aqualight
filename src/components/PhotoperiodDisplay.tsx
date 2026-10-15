@@ -1,5 +1,6 @@
 import type { ScheduleState } from '../types'
 import { calcPhotoperiodMinutes } from '../utils/generateBlocks'
+import { modeOf, solidPhotoperiodMinutes } from '../utils/solid'
 import styles from './PhotoperiodDisplay.module.css'
 
 interface Props {
@@ -13,7 +14,9 @@ function fmtHours(minutes: number): string {
 }
 
 export default function PhotoperiodDisplay({ schedule }: Props) {
-  const { wrgbMinutes, spotlightMinutes } = calcPhotoperiodMinutes(schedule)
+  const { wrgbMinutes, spotlightMinutes } = modeOf(schedule) === 'solid'
+    ? solidPhotoperiodMinutes(schedule)
+    : calcPhotoperiodMinutes(schedule)
   const wrgbHours = wrgbMinutes / 60
   const slHours = spotlightMinutes / 60
 

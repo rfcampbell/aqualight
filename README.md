@@ -24,6 +24,15 @@ id starts with the owning light's prefix and leaves every other entry alone.
 | `siesta` | `ScheduleState` — cycling WRGB with optional spotlight fill | Timeline + CycleControls + ChannelEditor | `generateYaml` |
 | `ramp` | `NanoScheduleState` — one peak with sunrise/sunset ramps | NanoEditor | `generateNanoYaml` |
 
+A `siesta`-kind light with `solidDefaults` (the 100P) also offers a **solid**
+mode, chosen by `ScheduleState.mode` (absent = siesta): sunrise ramp, WRGB held
+from core start until the sunset ramp, and the spotlight on only for
+`spotlightLeadMinutes` before sunrise → core start and sunset start →
+`spotlightTailMinutes` after sunset. Lights-off moves to the end of that tail.
+Deploy is refused while the ramps overlap the core (`solidProblems` in
+`src/utils/solid.ts`). Siesta output is held byte-for-byte against YAML frozen
+before solid mode existed (`src/utils/__tests__/golden/`).
+
 `transport` selects the command emitter, shared across lights rather than
 duplicated per light: `light_entities` (four HA entities, `brightness_pct`),
 `mqtt` (flat 0-100 JSON via `mqtt.publish`), `ha_light` (one entity,

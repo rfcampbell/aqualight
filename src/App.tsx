@@ -13,6 +13,7 @@ import Presets from './components/Presets'
 import { LIGHTS } from './lights'
 import { loadStored, saveStored } from './utils/lightStorage'
 import { generateLightYaml } from './utils/generateYaml'
+import { solidProblems } from './utils/solid'
 import './App.css'
 
 type HydrateSource = 'local' | 'ha' | 'offline'
@@ -146,7 +147,7 @@ function SiestaPanels({ light, schedule, onChange }: {
 
       <section className="section two-col">
         <div className="col-left">
-          <CycleControls schedule={schedule} onChange={onChange} />
+          <CycleControls light={light} schedule={schedule} onChange={onChange} />
           <div className="spacer" />
           <ChannelEditor light={light} schedule={schedule} onChange={onChange} />
         </div>
@@ -166,6 +167,7 @@ function SiestaPanels({ light, schedule, onChange }: {
           yaml={generateLightYaml(light, schedule)}
           prefix={light.prefix}
           state={schedule}
+          blockers={solidProblems(schedule)}
         />
         <DeviceTest light={light} schedule={schedule} />
       </section>

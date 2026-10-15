@@ -54,6 +54,17 @@ const BIOTOPE: SiestaLight = {
     spotlightBrightness: 30,
     ...BIOTOPE_DLI,
   },
+  // Pressurized CO2 since 2026-10: one continuous photoperiod, spotlight
+  // 05:30–06:15 and 13:15–14:00 around the ramps.
+  solidDefaults: {
+    sunrise:      { startMinute: 345, durationMinutes: 30, steps: 10 },  // 05:45
+    sunset:       { startMinute: 795, durationMinutes: 30, steps: 10 },  // 13:15
+    cycleStart:   375,   // 06:15
+    cycleEnd:     795,   // 13:15
+    wrgbChannels: { r: 60, g: 60, b: 60, w: 60 },
+    spotlightLeadMinutes: 15,
+    spotlightTailMinutes: 15,
+  },
 }
 
 const NANO: RampLight = {
