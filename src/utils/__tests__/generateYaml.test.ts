@@ -1,34 +1,27 @@
-import { describe, it, expect } from 'vitest'
-import { generateYaml, generateNanoYaml } from '../generateYaml'
-import { LIGHTS } from '../../lights'
-import type {
-  ScheduleState, NanoScheduleState, LightConfig, SiestaLight, RampLight,
-} from '../../types'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { generateRampYaml } from '../generateYaml'
+import { LIGHTS, lightById } from '../../lights'
+import type { RampScheduleState, LightConfig, Light } from '../../types'
 
-// Identity comes from the registry; these tests vary only the transport.
-const BIOTOPE = LIGHTS.find(l => l.id === 'biotope') as SiestaLight
-const NANO    = LIGHTS.find(l => l.id === 'nano')    as RampLight
+const BIOTOPE = lightById('biotope')!
+const NANO    = lightById('nano')!
 
-function withTransport<T extends SiestaLight | RampLight>(light: T, transport: LightConfig): T {
+function withTransport(light: Light, transport: LightConfig): Light {
   return { ...light, transport }
 }
 
+const golden = (name: string) => readFileSync(new URL(`./golden/${name}.yaml`, import.meta.url), 'utf8')
+const blocks = (yaml: string) => yaml.split('\n- id: ').slice(1)
+const block  = (yaml: string, id: string) => blocks(yaml).find(b => b.startsWith(`'${id}'`))!
+
+// Same instant the goldens were generated at, so the header's timestamp matches.
+beforeAll(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-15T12:00:00Z')) })
+afterAll(() => vi.useRealTimers())
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-const SCHEDULE: ScheduleState = {
-  sunrise:             { startMinute: 345, durationMinutes: 15, steps: 3 },
-  sunset:              { startMinute: 1020, durationMinutes: 15, steps: 3 },
-  cycle: {
-    wrgbDuration: 40, spotlightDuration: 20, overlapMinutes: 2,
-    cycleStart: 360, cycleEnd: 1020,
-  },
-  wrgbChannels:        { r: 40, g: 40, b: 40, w: 50 },
-  spotlightBrightness: 30,
-  ppfdWrgb:            120,
-  ppfdSpotlight:       80,
-}
-
-const NANO_SCHEDULE: NanoScheduleState = {
+const NANO_SCHEDULE: RampScheduleState = {
   rampUpStart:  420,
   peakStart:    480,
   peakEnd:      1080,
@@ -37,283 +30,141 @@ const NANO_SCHEDULE: NanoScheduleState = {
   stepMinutes:  30,
 }
 
-const MQTT_CFG: LightConfig = {
-  kind: 'mqtt',
-  entityId: 'light.chihiros_wrgb',
-  topic:    'chihiros/light/set',
-}
+// ── Lights without a spotlight are unchanged by spotlight support ─────────────
 
-// ── generateYaml — light_entities mode (new 100P default) ─────────────────────
-
-describe('generateYaml — light_entities mode (default)', () => {
-  const yaml = generateYaml(SCHEDULE, BIOTOPE)
-
-  it('emits four light.turn_on actions per WRGB-on automation', () => {
-    // aquarium_cycle_1_wrgb_on with peak r=g=b=40, w=50
-    const block = yaml.split('\n- id:').find(b => b.startsWith(" 'aquarium_cycle_1_wrgb_on'"))!
-    expect(block).toBeDefined()
-    const turnOns = block.match(/action: light\.turn_on/g) ?? []
-    // 4 channel turn_ons + (no spotlight on this first cycle's on-block)
-    expect(turnOns.length).toBe(4)
+describe('ramp output frozen before spotlight support', () => {
+  // Written by generateNanoYaml at f453749, before the spotlight existed.
+  it.each(['nano', 'display'])('%s defaults match byte for byte', id => {
+    const l = lightById(id)!
+    expect(generateRampYaml(l.defaults, l)).toBe(golden(`ramp-${id}-default`))
   })
 
-  it('emits brightness_pct equal to the 0-100 channel value (no rescaling)', () => {
-    expect(yaml).toContain('brightness_pct: 40')
-    expect(yaml).toContain('brightness_pct: 50')
+  it('a non-default nano schedule matches byte for byte', () => {
+    expect(generateRampYaml(
+      { rampUpStart: 400, peakStart: 470, peakEnd: 1065, rampDownEnd: 1130,
+        peakRgbw: { r: 55, g: 0, b: 35, w: 70 }, stepMinutes: 7 }, NANO,
+    )).toBe(golden('ramp-nano-non-default'))
+  })
+})
+
+// ── 100P: four channel entities plus the spotlight ────────────────────────────
+
+describe('100P output', () => {
+  const yaml = generateRampYaml(BIOTOPE.defaults, BIOTOPE)
+  const SPOT = BIOTOPE.spotlight!.entityId
+
+  it('has no siesta automations', () => {
+    expect(yaml).not.toMatch(/cycle_|overlap|returns|joins|sunrise_step|sunset_step|core_on/)
   })
 
-  it('targets the four chihiros-led-control channel entities', () => {
-    expect(yaml).toContain('entity_id: light.dywpr120fa39f25d91a7_red')
-    expect(yaml).toContain('entity_id: light.dywpr120fa39f25d91a7_green')
-    expect(yaml).toContain('entity_id: light.dywpr120fa39f25d91a7_blue')
-    expect(yaml).toContain('entity_id: light.dywpr120fa39f25d91a7_white')
+  it('every id is owned by the aquarium_ prefix', () => {
+    for (const b of blocks(yaml)) expect(b.startsWith("'aquarium_")).toBe(true)
   })
 
-  it('emits channels in fixed R/G/B/W order within a WRGB-on action', () => {
-    const block = yaml.split('\n- id:').find(b => b.startsWith(" 'aquarium_cycle_1_wrgb_on'"))!
-    const iR = block.indexOf('_red')
-    const iG = block.indexOf('_green')
-    const iB = block.indexOf('_blue')
-    const iW = block.indexOf('_white')
-    expect(iR).toBeGreaterThan(-1)
-    expect(iR).toBeLessThan(iG)
-    expect(iG).toBeLessThan(iB)
-    expect(iB).toBeLessThan(iW)
+  it('emits triggers in time order', () => {
+    const times = blocks(yaml).map(b => b.match(/at: '([\d:]+)'/)![1])
+    expect(times).toEqual([...times].sort())
   })
 
-  it('does not emit mqtt.publish anywhere', () => {
-    expect(yaml).not.toContain('mqtt.publish')
+  it('switches the spotlight four times at 30%: 05:30 on, 06:15 off, 13:15 on, 14:00 off', () => {
+    const spot = blocks(yaml)
+      .filter(b => b.includes(`entity_id: ${SPOT}`))
+      .map(b => [b.match(/at: '([\d:]+)'/)![1], b.includes('turn_on') ? 'on' : 'off'])
+    expect(spot).toEqual([['05:30:00', 'on'], ['06:15:00', 'off'], ['13:15:00', 'on'], ['14:00:00', 'off']])
+    expect(block(yaml, 'aquarium_spotlight_dawn_on')).toContain('brightness_pct: 30')
+    expect(block(yaml, 'aquarium_spotlight_dusk_on')).toContain('brightness_pct: 30')
   })
 
-  it('does not emit rgbw_color (used only in ha_light mode)', () => {
-    expect(yaml).not.toContain('rgbw_color')
-  })
-
-  it('OFF state → light.turn_off on all four channels', () => {
-    // aquarium_lights_off ends the day with WRGB off and spotlight off
-    const block = yaml.split('\n- id:').find(b => b.startsWith(" 'aquarium_lights_off'"))!
-    const turnOffs = block.match(/action: light\.turn_off/g) ?? []
-    // 4 WRGB channels + 1 spotlight = 5
-    expect(turnOffs.length).toBe(5)
+  it('emits four light.turn_on actions per WRGB step, in R/G/B/W order', () => {
+    const b = block(yaml, 'aquarium_ramp_up_0615')
+    expect((b.match(/action: light\.turn_on/g) ?? []).length).toBe(4)
+    expect(b.match(/brightness_pct: (\d+)/g)).toEqual(Array(4).fill('brightness_pct: 60'))
+    const order = ['_red', '_green', '_blue', '_white'].map(c => b.indexOf(c))
+    expect(order).toEqual([...order].sort((x, y) => x - y))
   })
 
   it('channel value of 0 → light.turn_off on that channel', () => {
-    // Sunset step 3/3 is frac=0 which the generator converts to {state:"OFF"}.
-    // Use a custom schedule whose peak has w=0 to exercise the per-channel zero path.
-    const zeroW = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 0 } }, BIOTOPE)
-    const block = zeroW.split('\n- id:').find(b => b.startsWith(" 'aquarium_cycle_1_wrgb_on'"))!
-    // Three turn_ons (r,g,b) + one turn_off (w) for this WRGB-on block
-    expect((block.match(/action: light\.turn_on/g) ?? []).length).toBe(3)
-    // Find the turn_off and check it targets the white channel
-    const whiteOff = /action: light\.turn_off\s+target:\s+entity_id: light\.dywpr120fa39f25d91a7_white/
-    expect(block).toMatch(whiteOff)
+    const y = generateRampYaml({ ...BIOTOPE.defaults, peakRgbw: { r: 40, g: 40, b: 40, w: 0 } }, BIOTOPE)
+    const b = block(y, 'aquarium_ramp_up_0615')
+    expect((b.match(/action: light\.turn_on/g) ?? []).length).toBe(3)
+    expect(b).toMatch(/action: light\.turn_off\s+target:\s+entity_id: light\.dywpr120fa39f25d91a7_white/)
   })
 
-  it('spotlight still uses action: light.turn_on with brightness_pct', () => {
-    expect(yaml).toContain('entity_id: light.aquarium_spotlight')
-    expect(yaml).toContain(`brightness_pct: ${SCHEDULE.spotlightBrightness}`)
+  it('ends the ramp with all four channels off', () => {
+    const b = block(yaml, 'aquarium_ramp_down_1345')
+    expect((b.match(/action: light\.turn_off/g) ?? []).length).toBe(4)
   })
 
-  it('header mentions all four HA entities', () => {
-    expect(yaml).toContain('HA entities r=light.dywpr120fa39f25d91a7_red')
-    expect(yaml).toContain('g=light.dywpr120fa39f25d91a7_green')
-    expect(yaml).toContain('b=light.dywpr120fa39f25d91a7_blue')
-    expect(yaml).toContain('w=light.dywpr120fa39f25d91a7_white')
+  it('header names the spotlight and its windows', () => {
+    expect(yaml).toContain(`# Spotlight  : ${SPOT} at 30%`)
+    expect(yaml).toContain('# Spotlight  : 05:30 – 06:15 and 13:15 – 14:00')
   })
 
-  it('sunrise step 1/3 scales channel values by 1/3', () => {
-    // frac=1/3 of {r:40,g:40,b:40,w:50} → 13,13,13,17
-    const block = yaml.split('\n- id:').find(b => b.startsWith(" 'aquarium_sunrise_step_1'"))!
-    expect(block).toContain('brightness_pct: 13')
-    expect(block).toContain('brightness_pct: 17')
+  it('follows lead, tail and brightness edits', () => {
+    const y = generateRampYaml({ ...BIOTOPE.defaults, spotlightLeadMinutes: 0, spotlightTailMinutes: 30, spotlightBrightness: 45 }, BIOTOPE)
+    expect(block(y, 'aquarium_spotlight_dawn_on')).toContain("at: '05:45:00'")
+    expect(block(y, 'aquarium_spotlight_dusk_off')).toContain("at: '14:15:00'")
+    expect(block(y, 'aquarium_spotlight_dusk_on')).toContain('brightness_pct: 45')
   })
 })
 
-// ── generateYaml — mqtt mode (explicit) ───────────────────────────────────────
+// ── Transports ────────────────────────────────────────────────────────────────
 
-describe('generateYaml — mqtt mode (explicit)', () => {
-  const yaml = generateYaml(SCHEDULE, withTransport(BIOTOPE, MQTT_CFG))
+describe('mqtt transport', () => {
+  const yaml = generateRampYaml(NANO_SCHEDULE, NANO)
 
-  it('emits service: mqtt.publish for WRGB', () => {
+  it('emits service: mqtt.publish on the nano topic', () => {
     expect(yaml).toContain('service: mqtt.publish')
-  })
-
-  it('uses the configured MQTT topic', () => {
-    expect(yaml).toContain('topic: chihiros/light/set')
-  })
-
-  it('peak payload has correct 0-100 channel values', () => {
-    expect(yaml).toContain('"red":40')
-    expect(yaml).toContain('"green":40')
-    expect(yaml).toContain('"blue":40')
-    expect(yaml).toContain('"white":50')
-  })
-
-  it('does not contain rgbw_color', () => {
-    expect(yaml).not.toContain('rgbw_color')
-  })
-
-  it('sunrise step 1/3 payload has scaled channel values', () => {
-    expect(yaml).toContain('"red":13')
-    expect(yaml).toContain('"white":17')
-  })
-
-  it('OFF payload is {"state":"OFF"}', () => {
-    expect(yaml).toContain('{"state":"OFF"}')
-  })
-
-  it('spotlight still uses action: light.turn_on with brightness_pct', () => {
-    expect(yaml).toContain('entity_id: light.aquarium_spotlight')
-    expect(yaml).toContain(`brightness_pct: ${SCHEDULE.spotlightBrightness}`)
-  })
-
-  it('header mentions MQTT topic not HA entity', () => {
-    expect(yaml).toContain('MQTT topic chihiros/light/set')
-    expect(yaml).not.toContain('HA entity light.chihiros_wrgb')
-  })
-})
-
-describe('generateYaml — mqtt payload peak scaling', () => {
-  it('40% uniform peak → payload values are 40', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, withTransport(BIOTOPE, MQTT_CFG))
-    expect(yaml).toContain('"red":40,"green":40,"blue":40,"white":40')
-  })
-
-  it('100% peak → payload values are 100', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 100, g: 100, b: 100, w: 100 } }, withTransport(BIOTOPE, MQTT_CFG))
-    expect(yaml).toContain('"red":100,"green":100,"blue":100,"white":100')
-  })
-
-  it('sunrise step 1/3 at 40% uniform peak → values are 13 (1/3 of 40, rounded)', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, withTransport(BIOTOPE, MQTT_CFG))
-    expect(yaml).toContain('"red":13,"green":13,"blue":13,"white":13')
-  })
-
-  it('sunrise step 3/3 equals peak value', () => {
-    const yaml = generateYaml({ ...SCHEDULE, wrgbChannels: { r: 40, g: 40, b: 40, w: 40 } }, withTransport(BIOTOPE, MQTT_CFG))
-    const peakPayload = '"red":40,"green":40,"blue":40,"white":40'
-    expect(yaml.split(peakPayload).length).toBeGreaterThan(2)
-  })
-})
-
-// ── generateYaml — ha_light single-entity mode ────────────────────────────────
-
-describe('generateYaml — ha_light single-entity mode', () => {
-  const cfg: LightConfig = { kind: 'ha_light', entityId: 'light.chihiros_wrgb' }
-  const yaml = generateYaml(SCHEDULE, withTransport(BIOTOPE, cfg))
-
-  it('emits action: light.turn_on for ON states', () => {
-    expect(yaml).toContain('action: light.turn_on')
-  })
-
-  it('emits action: light.turn_off for OFF states', () => {
-    expect(yaml).toContain('action: light.turn_off')
-  })
-
-  it('uses the provided entityId in turn_on/off actions', () => {
-    expect(yaml).toContain('entity_id: light.chihiros_wrgb')
-  })
-
-  it('emits rgbw_color with 0-255 scaled values', () => {
-    expect(yaml).toContain('rgbw_color: [102, 102, 102, 127]')
-  })
-
-  it('does not emit mqtt.publish', () => {
-    expect(yaml).not.toContain('mqtt.publish')
-  })
-
-  it('does not emit brightness_pct for WRGB blocks', () => {
-    const wrgbBlocks = yaml.split('\n- id:').filter(b =>
-      b.includes('action: light.turn_on') && b.includes('light.chihiros_wrgb')
-    )
-    expect(wrgbBlocks.length).toBeGreaterThan(0)
-    for (const block of wrgbBlocks) {
-      // The spotlight has its own brightness_pct, so only assert on the WRGB
-      // light.turn_on lines — pull just the entity-keyed section.
-      const wrgbSection = block.split('entity_id: light.aquarium_spotlight')[0]
-      expect(wrgbSection).not.toContain('brightness_pct')
-    }
-  })
-
-  it('header mentions HA entity', () => {
-    expect(yaml).toContain('HA entity light.chihiros_wrgb')
-  })
-})
-
-// ── generateNanoYaml — mqtt mode (default) ────────────────────────────────────
-
-describe('generateNanoYaml — mqtt mode (default)', () => {
-  const yaml = generateNanoYaml(NANO_SCHEDULE, NANO)
-
-  it('emits service: mqtt.publish', () => {
-    expect(yaml).toContain('service: mqtt.publish')
-  })
-
-  it('uses nano MQTT topic', () => {
     expect(yaml).toContain('topic: chihiros/nano/light/set')
-  })
-
-  it('does not emit action: light.turn_on', () => {
     expect(yaml).not.toContain('action: light.turn_on')
   })
 
-  it('peak step payload has correct 0-100 channel values', () => {
-    expect(yaml).toContain('"red":40')
-    expect(yaml).toContain('"white":55')
+  it('peak payload has 0-100 channel values', () => {
+    expect(yaml).toContain('"red":40,"green":40,"blue":45,"white":55')
   })
 
   it('OFF payload is {"state":"OFF"}', () => {
     expect(yaml).toContain('{"state":"OFF"}')
   })
 
-  it('header mentions MQTT topic', () => {
+  it('header mentions the MQTT topic', () => {
     expect(yaml).toContain('MQTT topic chihiros/nano/light/set')
   })
 })
 
-describe('generateNanoYaml — ha_light single-entity mode', () => {
+describe('ha_light transport', () => {
   const cfg: LightConfig = { kind: 'ha_light', entityId: 'light.chihiros_nano_wrgb' }
-  const yaml = generateNanoYaml(NANO_SCHEDULE, withTransport(NANO, cfg))
+  const yaml = generateRampYaml(NANO_SCHEDULE, withTransport(NANO, cfg))
 
-  it('emits action: light.turn_on for ramp steps', () => {
-    expect(yaml).toContain('action: light.turn_on')
-  })
-
-  it('emits action: light.turn_off at the end of ramp down (frac=0)', () => {
+  it('turns on with rgbw_color on the 0-255 scale and off at the end', () => {
+    expect(yaml).toContain('rgbw_color: [102, 102, 115, 140]')
     expect(yaml).toContain('action: light.turn_off')
-  })
-
-  it('does not use mqtt.publish', () => {
     expect(yaml).not.toContain('mqtt.publish')
   })
 
-  it('peak step has correct rgbw_color (0-255 scale)', () => {
-    expect(yaml).toContain('rgbw_color: [102, 102, 115, 140]')
-  })
-
-  it('header mentions HA entity', () => {
+  it('header mentions the HA entity', () => {
     expect(yaml).toContain('HA entity light.chihiros_nano_wrgb')
   })
 })
 
-// ── Exported default configs ──────────────────────────────────────────────────
-
-describe('exported default configs', () => {
-  it('biotope uses light_entities (HACS integration)', () => {
-    expect(BIOTOPE.transport.kind).toBe('light_entities')
-    if (BIOTOPE.transport.kind === 'light_entities') {
-      expect(BIOTOPE.transport.entityIds.red).toBe('light.dywpr120fa39f25d91a7_red')
-      expect(BIOTOPE.transport.entityIds.green).toBe('light.dywpr120fa39f25d91a7_green')
-      expect(BIOTOPE.transport.entityIds.blue).toBe('light.dywpr120fa39f25d91a7_blue')
-      expect(BIOTOPE.transport.entityIds.white).toBe('light.dywpr120fa39f25d91a7_white')
-    }
+describe('registry transports', () => {
+  it('100P uses the four chihiros-led-control entities', () => {
+    expect(BIOTOPE.transport).toEqual({
+      kind: 'light_entities',
+      entityIds: {
+        red:   'light.dywpr120fa39f25d91a7_red',
+        green: 'light.dywpr120fa39f25d91a7_green',
+        blue:  'light.dywpr120fa39f25d91a7_blue',
+        white: 'light.dywpr120fa39f25d91a7_white',
+      },
+    })
   })
 
   it('nano uses mqtt', () => {
-    expect(NANO.transport.kind).toBe('mqtt')
-    if (NANO.transport.kind === 'mqtt') {
-      expect(NANO.transport.entityId).toBe('light.chihiros_nano_wrgb')
-      expect(NANO.transport.topic).toBe('chihiros/nano/light/set')
-    }
+    expect(NANO.transport).toEqual({ kind: 'mqtt', entityId: 'light.chihiros_nano_wrgb', topic: 'chihiros/nano/light/set' })
+  })
+
+  it('every light generates without throwing', () => {
+    for (const l of LIGHTS) expect(generateRampYaml(l.defaults, l)).toContain(`- id: '${l.prefix}`)
   })
 })

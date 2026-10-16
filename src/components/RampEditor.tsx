@@ -1,15 +1,17 @@
 import type { CSSProperties } from 'react'
-import type { NanoScheduleState, RgbwChannels, RampLight } from '../types'
-import { minutesToHHMM, hhmmToMinutes } from '../utils/generateBlocks'
-import styles from './NanoEditor.module.css'
+import type { RampScheduleState, RgbwChannels, Light } from '../types'
+import { minutesToHHMM, hhmmToMinutes, rampEvents, spotWindows, photoperiodMinutes } from '../utils/ramp'
+import styles from './RampEditor.module.css'
 
 interface Props {
-  light: RampLight
-  schedule: NanoScheduleState
-  onChange: (s: NanoScheduleState) => void
+  light: Light
+  schedule: RampScheduleState
+  onChange: (s: RampScheduleState) => void
 }
 
-export default function NanoEditor({ light, schedule, onChange }: Props) {
+const SPOT_COLOR = '#e8a020'
+
+export default function RampEditor({ light, schedule, onChange }: Props) {
   const { rampUpStart, peakStart, peakEnd, rampDownEnd, peakRgbw, stepMinutes } = schedule
 
   function setTime(field: 'rampUpStart' | 'peakStart' | 'peakEnd' | 'rampDownEnd', hhmm: string) {
@@ -21,10 +23,9 @@ export default function NanoEditor({ light, schedule, onChange }: Props) {
     onChange({ ...schedule, peakRgbw: { ...peakRgbw, [ch]: val } })
   }
 
-  const photoHours = ((rampDownEnd - rampUpStart) / 60).toFixed(1)
-  const upSteps    = Math.round((peakStart - rampUpStart) / Math.max(1, stepMinutes))
-  const downSteps  = Math.round((rampDownEnd - peakEnd) / Math.max(1, stepMinutes))
-  const totalAutos = (upSteps + 1) + (downSteps + 1) - (peakStart === peakEnd ? 1 : 0)
+  const { wrgbMinutes, spotlightMinutes } = photoperiodMinutes(light, schedule)
+  const windows    = spotWindows(light, schedule)
+  const totalAutos = rampEvents(schedule).length + windows.length * 2
 
   return (
     <div className={styles.panel}>
@@ -34,7 +35,7 @@ export default function NanoEditor({ light, schedule, onChange }: Props) {
           .filter(Boolean).join(' · ')}
       </p>
 
-      <RampPreview schedule={schedule} />
+      <RampPreview schedule={schedule} windows={windows} />
 
       <div className={styles.section}>
         <div className={styles.sectionLabel}>Ramp Waypoints</div>
@@ -56,6 +57,23 @@ export default function NanoEditor({ light, schedule, onChange }: Props) {
         </div>
       </div>
 
+      {light.spotlight && (
+        <div className={styles.section}>
+          <div className={styles.sectionLabel}>Spotlight · {light.spotlight.entityId}</div>
+          <Slider label="Level" min={1} value={schedule.spotlightBrightness ?? 100} color={SPOT_COLOR}
+            onChange={v => onChange({ ...schedule, spotlightBrightness: v })} />
+          <div className={styles.spotGrid}>
+            <MinutesInput label="Lead (before ramp up)" value={schedule.spotlightLeadMinutes ?? 0}
+              onChange={v => onChange({ ...schedule, spotlightLeadMinutes: v })} />
+            <MinutesInput label="Tail (after ramp down)" value={schedule.spotlightTailMinutes ?? 0}
+              onChange={v => onChange({ ...schedule, spotlightTailMinutes: v })} />
+          </div>
+          <div className={styles.spotWindows}>
+            On {windows.map(([a, b]) => `${minutesToHHMM(a)}–${minutesToHHMM(b)}`).join(' and ')}
+          </div>
+        </div>
+      )}
+
       <div className={styles.footer}>
         <label className={styles.stepRow}>
           <span className={styles.stepLabel}>Step</span>
@@ -67,7 +85,8 @@ export default function NanoEditor({ light, schedule, onChange }: Props) {
           <span className={styles.stepUnit}>min · {totalAutos} automations</span>
         </label>
         <div className={styles.photoperiod}>
-          Photoperiod <strong>{photoHours} h</strong>
+          Photoperiod <strong>{(wrgbMinutes / 60).toFixed(1)} h</strong>
+          {light.spotlight && <> · spotlight <strong>{(spotlightMinutes / 60).toFixed(1)} h</strong></>}
         </div>
       </div>
     </div>
@@ -83,12 +102,28 @@ function TimeInput({ label, value, onChange }: { label: string; value: string; o
   )
 }
 
-function Slider({ label, value, color, onChange }: { label: string; value: number; color: string; onChange: (v: number) => void }) {
+function MinutesInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <label className={styles.stepRow}>
+      <span className={styles.stepLabel}>{label}</span>
+      <input
+        type="number" min={0} max={240} value={value}
+        className={styles.stepInput}
+        onChange={e => onChange(Math.max(0, Math.min(240, parseInt(e.target.value) || 0)))}
+      />
+      <span className={styles.stepUnit}>min</span>
+    </label>
+  )
+}
+
+function Slider({ label, value, color, onChange, min = 0 }: {
+  label: string; value: number; color: string; onChange: (v: number) => void; min?: number
+}) {
   return (
     <div className={styles.sliderRow}>
       <label className={styles.sliderLabel}>{label}</label>
       <input
-        type="range" min={0} max={100} value={value}
+        type="range" min={min} max={100} value={value}
         className={styles.slider}
         style={{ '--track-color': color } as CSSProperties}
         onChange={e => onChange(parseInt(e.target.value))}
@@ -98,11 +133,11 @@ function Slider({ label, value, color, onChange }: { label: string; value: numbe
   )
 }
 
-function RampPreview({ schedule }: { schedule: NanoScheduleState }) {
+function RampPreview({ schedule, windows }: { schedule: RampScheduleState; windows: [number, number][] }) {
   const { rampUpStart, peakStart, peakEnd, rampDownEnd, peakRgbw } = schedule
   const MARGIN = 20
-  const xMin   = Math.max(0, rampUpStart - MARGIN)
-  const xMax   = Math.min(1440, rampDownEnd + MARGIN)
+  const xMin   = Math.max(0, Math.min(rampUpStart, ...windows.map(w => w[0])) - MARGIN)
+  const xMax   = Math.min(1440, Math.max(rampDownEnd, ...windows.map(w => w[1])) + MARGIN)
   const xRange = Math.max(1, xMax - xMin)
   const W = 400, H = 50
 
@@ -131,6 +166,10 @@ function RampPreview({ schedule }: { schedule: NanoScheduleState }) {
         </defs>
         {hourLabels.map(m => (
           <line key={m} x1={tx(m)} y1={0} x2={tx(m)} y2={H} stroke="#1a2030" strokeWidth="1" />
+        ))}
+        {windows.map(([a, b]) => (
+          <rect key={a} x={tx(a)} y={H - 8} width={Math.max(0, tx(b) - tx(a))} height={8}
+            fill={SPOT_COLOR} opacity="0.55" />
         ))}
         <polygon points={trapFill}   fill="url(#nanoRampGrad)" />
         <polyline points={trapStroke} fill="none" stroke={color} strokeWidth="1.5" opacity="0.9" />

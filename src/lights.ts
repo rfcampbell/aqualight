@@ -1,4 +1,4 @@
-import type { Light, SiestaLight, RampLight, DliParams } from './types'
+import type { Light, DliParams } from './types'
 import shared from '../backend/lights.json'
 
 /**
@@ -13,16 +13,17 @@ import shared from '../backend/lights.json'
  * else should need to change.
  */
 
-// One literal per measured value, referenced by both `dli` and `defaults`.
-const BIOTOPE_DLI: DliParams = { ppfdWrgb: 120, ppfdSpotlight: 80 }
+// One literal per measured value. PPFD 57 is the WRGB at 60/60/60/60.
+const BIOTOPE_DLI: DliParams = { ppfdWrgb: 57, ppfdSpotlight: 1 }
 
-const BIOTOPE: SiestaLight = {
+// Pressurized CO2 since 2026-10: one continuous photoperiod, spotlight
+// 05:30–06:15 and 13:15–14:00 around the ramps.
+const BIOTOPE: Light = {
   id:          'biotope',
   prefix:      'aquarium_',
   presetId:    'biotope',
   label:       '100P Biotope',
   aliasPrefix: 'Aquarium',
-  scheduleKind: 'siesta',
   transport: {
     kind: 'light_entities',
     entityIds: {
@@ -37,44 +38,28 @@ const BIOTOPE: SiestaLight = {
     title:     'AquaLight — Home Assistant automations',
     lampLabel: 'WRGB lamp  ',
   },
-  storage: {
-    key: 'aqualight_defaults',
-    // Legacy: this key has only ever held these two fields.
-    fields: ['wrgbChannels', 'spotlightBrightness'],
-  },
-  dli: BIOTOPE_DLI,
+  storage: { key: 'aqualight_defaults' },
+  dli:     BIOTOPE_DLI,
   defaults: {
-    sunrise: { startMinute: 345, durationMinutes: 15, steps: 3 },
-    sunset:  { startMinute: 1020, durationMinutes: 15, steps: 3 },
-    cycle: {
-      wrgbDuration: 40, spotlightDuration: 20, overlapMinutes: 2,
-      cycleStart: 360, cycleEnd: 1020,
-    },
-    wrgbChannels:        { r: 40, g: 40, b: 40, w: 50 },
-    spotlightBrightness: 30,
-    ...BIOTOPE_DLI,
-  },
-  // Pressurized CO2 since 2026-10: one continuous photoperiod, spotlight
-  // 05:30–06:15 and 13:15–14:00 around the ramps.
-  solidDefaults: {
-    sunrise:      { startMinute: 345, durationMinutes: 30, steps: 10 },  // 05:45
-    sunset:       { startMinute: 795, durationMinutes: 30, steps: 10 },  // 13:15
-    cycleStart:   375,   // 06:15
-    cycleEnd:     795,   // 13:15
-    wrgbChannels: { r: 60, g: 60, b: 60, w: 60 },
+    rampUpStart: 345,   // 05:45
+    peakStart:   375,   // 06:15
+    peakEnd:     795,   // 13:15
+    rampDownEnd: 825,   // 13:45
+    peakRgbw:    { r: 60, g: 60, b: 60, w: 60 },
+    stepMinutes: 3,
+    spotlightBrightness:  30,
     spotlightLeadMinutes: 15,
     spotlightTailMinutes: 15,
   },
 }
 
-const NANO: RampLight = {
+const NANO: Light = {
   id:          'nano',
   prefix:      'nano_',
   presetId:    'nano',
   label:       'WRGB II Pro',
   sublabel:    'UNS 45U',
   aliasPrefix: 'Nano',
-  scheduleKind: 'ramp',
   transport: {
     kind:     'mqtt',
     entityId: 'light.chihiros_nano_wrgb',
@@ -109,14 +94,13 @@ const DISPLAY_DLI: DliParams = {
   todo:          'Placeholder values. Measure PPFD once the WRGB II Pro 90 is installed.',
 }
 
-const DISPLAY: RampLight = {
+const DISPLAY: Light = {
   id:          'display',
   prefix:      'display_',
   presetId:    'display',
   label:       'WRGB II Pro 90',
   sublabel:    'Display',
   aliasPrefix: 'Display',
-  scheduleKind: 'ramp',
   // Same transport as the 100P: four HA entities via chihiros-led-control.
   transport: {
     kind: 'light_entities',

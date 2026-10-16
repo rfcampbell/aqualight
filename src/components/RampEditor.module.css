@@ -215,3 +215,18 @@
 .photoperiod strong {
   color: var(--color-text);
 }
+
+/* Spotlight */
+.spotGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 0.25rem;
+}
+
+.spotWindows {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,11 +1,11 @@
-import type { ScheduleState } from '../types'
-import { calcPhotoperiodMinutes } from '../utils/generateBlocks'
-import { modeOf, solidDliMinutes } from '../utils/solid'
+import type { Light, DliParams, RampScheduleState } from '../types'
+import { dliMinutes } from '../utils/ramp'
 import styles from './ParDliEstimator.module.css'
 
 interface Props {
-  schedule: ScheduleState
-  onChange: (s: ScheduleState) => void
+  light: Light
+  dli: DliParams
+  schedule: RampScheduleState
 }
 
 function dliQuality(dli: number): { label: string; className: string } {
@@ -14,13 +14,10 @@ function dliQuality(dli: number): { label: string; className: string } {
   return { label: 'High', className: styles.qualityHigh }
 }
 
-export default function ParDliEstimator({ schedule, onChange }: Props) {
-  const { ppfdWrgb, ppfdSpotlight } = schedule
-  // Siesta counts ramps at full power, as it always has; solid counts each
-  // ramp step at its own level.
-  const { wrgbMinutes, spotlightMinutes } = modeOf(schedule) === 'solid'
-    ? solidDliMinutes(schedule)
-    : calcPhotoperiodMinutes(schedule)
+/** DLI from the registry's PPFD, with each ramp step counted at its own level. */
+export default function ParDliEstimator({ light, dli, schedule }: Props) {
+  const { ppfdWrgb, ppfdSpotlight } = dli
+  const { wrgbMinutes, spotlightMinutes } = dliMinutes(light, schedule)
 
   const dliWrgb = (ppfdWrgb * wrgbMinutes * 60) / 1_000_000
   const dliSpotlight = (ppfdSpotlight * spotlightMinutes * 60) / 1_000_000
@@ -34,27 +31,14 @@ export default function ParDliEstimator({ schedule, onChange }: Props) {
 
       <div className={styles.inputs}>
         <div className={styles.field}>
-          <label className={styles.label}>WRGB PPFD (µmol/m²/s)</label>
-          <input
-            type="number"
-            min={0}
-            max={2000}
-            className={styles.numberInput}
-            value={ppfdWrgb}
-            onChange={e => onChange({ ...schedule, ppfdWrgb: Number(e.target.value) })}
-          />
+          <span className={styles.label}>WRGB PPFD at peak: <strong>{ppfdWrgb}</strong> µmol/m²/s</span>
         </div>
-        <div className={styles.field}>
-          <label className={styles.label}>Spotlight PPFD (µmol/m²/s)</label>
-          <input
-            type="number"
-            min={0}
-            max={2000}
-            className={styles.numberInput}
-            value={ppfdSpotlight}
-            onChange={e => onChange({ ...schedule, ppfdSpotlight: Number(e.target.value) })}
-          />
-        </div>
+        {light.spotlight && (
+          <div className={styles.field}>
+            <span className={styles.label}>Spotlight PPFD: <strong>{ppfdSpotlight}</strong> µmol/m²/s</span>
+          </div>
+        )}
+        {dli.todo && <div className={styles.todo}>⚠ {dli.todo}</div>}
       </div>
 
       <div className={styles.results}>
@@ -63,11 +47,13 @@ export default function ParDliEstimator({ schedule, onChange }: Props) {
           <span className={styles.resultVal} style={{ color: '#1a8a6e' }}>{dliWrgb.toFixed(2)}</span>
           <span className={styles.resultUnit}>mol/m²/day</span>
         </div>
-        <div className={styles.result}>
-          <span className={styles.resultLabel}>Spotlight DLI</span>
-          <span className={styles.resultVal} style={{ color: '#e8a020' }}>{dliSpotlight.toFixed(2)}</span>
-          <span className={styles.resultUnit}>mol/m²/day</span>
-        </div>
+        {light.spotlight && (
+          <div className={styles.result}>
+            <span className={styles.resultLabel}>Spotlight DLI</span>
+            <span className={styles.resultVal} style={{ color: '#e8a020' }}>{dliSpotlight.toFixed(2)}</span>
+            <span className={styles.resultUnit}>mol/m²/day</span>
+          </div>
+        )}
         <div className={styles.totalRow}>
           <span className={styles.totalLabel}>Combined DLI</span>
           <span className={styles.totalVal}>{dliTotal.toFixed(2)}</span>

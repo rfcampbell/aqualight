@@ -144,28 +144,11 @@ body {
   width: 100%;
 }
 
-.timeline-section {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 1.25rem 1.5rem 1rem;
-  box-shadow:
-    0 2px 12px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-}
-
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.25rem;
   align-items: start;
-}
-
-.col-left,
-.col-right {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
 }
 
 .spacer {

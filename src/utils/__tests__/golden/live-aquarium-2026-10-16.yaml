@@ -1,0 +1,655 @@
+- id: 'aquarium_spotlight_dawn_on'
+  alias: 'Aquarium — Spotlight Dawn On'
+  description: 'Spotlight on 15min before sunrise'
+  mode: single
+  trigger:
+  - platform: time
+    at: '05:30:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.aquarium_spotlight
+    data:
+      brightness_pct: 30
+
+- id: 'aquarium_sunrise_step_1'
+  alias: 'Aquarium — Sunrise 1/10'
+  description: 'WRGB to 10% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '05:45:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 6
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 6
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 6
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 6
+
+- id: 'aquarium_sunrise_step_2'
+  alias: 'Aquarium — Sunrise 2/10'
+  description: 'WRGB to 20% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '05:48:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 12
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 12
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 12
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 12
+
+- id: 'aquarium_sunrise_step_3'
+  alias: 'Aquarium — Sunrise 3/10'
+  description: 'WRGB to 30% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '05:51:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 18
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 18
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 18
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 18
+
+- id: 'aquarium_sunrise_step_4'
+  alias: 'Aquarium — Sunrise 4/10'
+  description: 'WRGB to 40% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '05:54:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 24
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 24
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 24
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 24
+
+- id: 'aquarium_sunrise_step_5'
+  alias: 'Aquarium — Sunrise 5/10'
+  description: 'WRGB to 50% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '05:57:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 30
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 30
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 30
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 30
+
+- id: 'aquarium_sunrise_step_6'
+  alias: 'Aquarium — Sunrise 6/10'
+  description: 'WRGB to 60% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '06:00:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 36
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 36
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 36
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 36
+
+- id: 'aquarium_sunrise_step_7'
+  alias: 'Aquarium — Sunrise 7/10'
+  description: 'WRGB to 70% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '06:03:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 42
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 42
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 42
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 42
+
+- id: 'aquarium_sunrise_step_8'
+  alias: 'Aquarium — Sunrise 8/10'
+  description: 'WRGB to 80% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '06:06:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 48
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 48
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 48
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 48
+
+- id: 'aquarium_sunrise_step_9'
+  alias: 'Aquarium — Sunrise 9/10'
+  description: 'WRGB to 90% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '06:09:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 54
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 54
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 54
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 54
+
+- id: 'aquarium_sunrise_step_10'
+  alias: 'Aquarium — Sunrise 10/10'
+  description: 'WRGB to 100% (sunrise ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '06:12:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 60
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 60
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 60
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 60
+
+- id: 'aquarium_core_on'
+  alias: 'Aquarium — Core On'
+  description: 'WRGB to full for the solid photoperiod, spotlight off'
+  mode: single
+  trigger:
+  - platform: time
+    at: '06:15:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 60
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 60
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 60
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 60
+  - action: light.turn_off
+    target:
+      entity_id: light.aquarium_spotlight
+
+- id: 'aquarium_spotlight_dusk_on'
+  alias: 'Aquarium — Spotlight Dusk On'
+  description: 'Spotlight on through the sunset ramp and 15min past it'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:15:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.aquarium_spotlight
+    data:
+      brightness_pct: 30
+
+- id: 'aquarium_sunset_step_1'
+  alias: 'Aquarium — Sunset 1/10'
+  description: 'WRGB to 90% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:15:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 54
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 54
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 54
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 54
+
+- id: 'aquarium_sunset_step_2'
+  alias: 'Aquarium — Sunset 2/10'
+  description: 'WRGB to 80% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:18:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 48
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 48
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 48
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 48
+
+- id: 'aquarium_sunset_step_3'
+  alias: 'Aquarium — Sunset 3/10'
+  description: 'WRGB to 70% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:21:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 42
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 42
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 42
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 42
+
+- id: 'aquarium_sunset_step_4'
+  alias: 'Aquarium — Sunset 4/10'
+  description: 'WRGB to 60% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:24:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 36
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 36
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 36
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 36
+
+- id: 'aquarium_sunset_step_5'
+  alias: 'Aquarium — Sunset 5/10'
+  description: 'WRGB to 50% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:27:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 30
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 30
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 30
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 30
+
+- id: 'aquarium_sunset_step_6'
+  alias: 'Aquarium — Sunset 6/10'
+  description: 'WRGB to 40% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:30:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 24
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 24
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 24
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 24
+
+- id: 'aquarium_sunset_step_7'
+  alias: 'Aquarium — Sunset 7/10'
+  description: 'WRGB to 30% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:33:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 18
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 18
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 18
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 18
+
+- id: 'aquarium_sunset_step_8'
+  alias: 'Aquarium — Sunset 8/10'
+  description: 'WRGB to 20% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:36:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 12
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 12
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 12
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 12
+
+- id: 'aquarium_sunset_step_9'
+  alias: 'Aquarium — Sunset 9/10'
+  description: 'WRGB to 10% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:39:00'
+  action:
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+    data:
+      brightness_pct: 6
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+    data:
+      brightness_pct: 6
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+    data:
+      brightness_pct: 6
+  - action: light.turn_on
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+    data:
+      brightness_pct: 6
+
+- id: 'aquarium_sunset_step_10'
+  alias: 'Aquarium — Sunset 10/10'
+  description: 'WRGB to 0% (sunset ramp)'
+  mode: single
+  trigger:
+  - platform: time
+    at: '13:42:00'
+  action:
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+
+- id: 'aquarium_lights_off'
+  alias: 'Aquarium — Lights Off'
+  description: 'All aquarium lights off for the night'
+  mode: single
+  trigger:
+  - platform: time
+    at: '14:00:00'
+  action:
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_red
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_green
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_blue
+  - action: light.turn_off
+    target:
+      entity_id: light.dywpr120fa39f25d91a7_white
+  - action: light.turn_off
+    target:
+      entity_id: light.aquarium_spotlight

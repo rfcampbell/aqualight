@@ -11,7 +11,8 @@ interface Props {
   device: string
   currentState: unknown
   source: 'local' | 'ha' | 'offline'
-  onLoad: (state: Record<string, unknown>) => void
+  /** Returns an error message when the state can't be loaded. */
+  onLoad: (state: unknown) => string | null
 }
 
 type MsgKind = 'ok' | 'error' | 'info' | null
@@ -73,8 +74,9 @@ export default function Presets({ device, currentState, source, onLoad }: Props)
       const res  = await fetch(`/api/presets/${encodeURIComponent(selected)}`)
       const data = await res.json()
       if (data.state) {
-        onLoad(data.state as Record<string, unknown>)
-        flash('ok', `Loaded "${selected}".`)
+        const err = onLoad(data.state)
+        if (err) flash('error', err)
+        else     flash('ok', `Loaded "${selected}".`)
       } else {
         flash('error', data.error ?? 'Load failed.')
       }
@@ -113,7 +115,7 @@ export default function Presets({ device, currentState, source, onLoad }: Props)
       >
         {source === 'ha'      ? '● loaded from HA'
           : source === 'offline' ? '⚠ backend unreachable'
-          : '○ local defaults'}
+          : '○ this browser (not from HA)'}
       </span>
 
       <select

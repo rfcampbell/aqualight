@@ -1,0 +1,645 @@
+# AquaLight — Nano (Chihiros WRGB II Pro · UNS 45U) automations
+# Generated: 2026-10-15 12:00:00
+#
+# WRGB II Pro : MQTT topic chihiros/nano/light/set
+#
+# Ramp up    : 07:00 → 09:00 (5min steps)
+# Peak hold  : 09:00 – 18:00 at R=40 G=40 B=45 W=55
+# Ramp down  : 18:00 → 20:00 (5min steps)
+# Off        : 20:00 – 07:00 (RGBW 0,0,0,0)
+- id: 'nano_ramp_up_0705'
+  alias: 'Nano — Ramp Up 07:05 (4%)'
+  description: 'RGBW 2,2,2,2'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:05:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":2,"green":2,"blue":2,"white":2}'
+
+- id: 'nano_ramp_up_0710'
+  alias: 'Nano — Ramp Up 07:10 (8%)'
+  description: 'RGBW 3,3,4,5'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:10:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":3,"green":3,"blue":4,"white":5}'
+
+- id: 'nano_ramp_up_0715'
+  alias: 'Nano — Ramp Up 07:15 (13%)'
+  description: 'RGBW 5,5,6,7'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:15:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":5,"green":5,"blue":6,"white":7}'
+
+- id: 'nano_ramp_up_0720'
+  alias: 'Nano — Ramp Up 07:20 (17%)'
+  description: 'RGBW 7,7,8,9'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:20:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":7,"green":7,"blue":8,"white":9}'
+
+- id: 'nano_ramp_up_0725'
+  alias: 'Nano — Ramp Up 07:25 (21%)'
+  description: 'RGBW 8,8,9,11'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:25:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":8,"green":8,"blue":9,"white":11}'
+
+- id: 'nano_ramp_up_0730'
+  alias: 'Nano — Ramp Up 07:30 (25%)'
+  description: 'RGBW 10,10,11,14'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:30:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":10,"green":10,"blue":11,"white":14}'
+
+- id: 'nano_ramp_up_0735'
+  alias: 'Nano — Ramp Up 07:35 (29%)'
+  description: 'RGBW 12,12,13,16'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:35:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":12,"green":12,"blue":13,"white":16}'
+
+- id: 'nano_ramp_up_0740'
+  alias: 'Nano — Ramp Up 07:40 (33%)'
+  description: 'RGBW 13,13,15,18'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:40:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":13,"green":13,"blue":15,"white":18}'
+
+- id: 'nano_ramp_up_0745'
+  alias: 'Nano — Ramp Up 07:45 (38%)'
+  description: 'RGBW 15,15,17,21'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:45:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":15,"green":15,"blue":17,"white":21}'
+
+- id: 'nano_ramp_up_0750'
+  alias: 'Nano — Ramp Up 07:50 (42%)'
+  description: 'RGBW 17,17,19,23'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:50:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":17,"green":17,"blue":19,"white":23}'
+
+- id: 'nano_ramp_up_0755'
+  alias: 'Nano — Ramp Up 07:55 (46%)'
+  description: 'RGBW 18,18,21,25'
+  mode: single
+  trigger:
+    - platform: time
+      at: '07:55:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":18,"green":18,"blue":21,"white":25}'
+
+- id: 'nano_ramp_up_0800'
+  alias: 'Nano — Ramp Up 08:00 (50%)'
+  description: 'RGBW 20,20,23,28'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:00:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":20,"green":20,"blue":23,"white":28}'
+
+- id: 'nano_ramp_up_0805'
+  alias: 'Nano — Ramp Up 08:05 (54%)'
+  description: 'RGBW 22,22,24,30'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:05:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":22,"green":22,"blue":24,"white":30}'
+
+- id: 'nano_ramp_up_0810'
+  alias: 'Nano — Ramp Up 08:10 (58%)'
+  description: 'RGBW 23,23,26,32'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:10:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":23,"green":23,"blue":26,"white":32}'
+
+- id: 'nano_ramp_up_0815'
+  alias: 'Nano — Ramp Up 08:15 (63%)'
+  description: 'RGBW 25,25,28,34'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:15:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":25,"green":25,"blue":28,"white":34}'
+
+- id: 'nano_ramp_up_0820'
+  alias: 'Nano — Ramp Up 08:20 (67%)'
+  description: 'RGBW 27,27,30,37'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:20:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":27,"green":27,"blue":30,"white":37}'
+
+- id: 'nano_ramp_up_0825'
+  alias: 'Nano — Ramp Up 08:25 (71%)'
+  description: 'RGBW 28,28,32,39'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:25:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":28,"green":28,"blue":32,"white":39}'
+
+- id: 'nano_ramp_up_0830'
+  alias: 'Nano — Ramp Up 08:30 (75%)'
+  description: 'RGBW 30,30,34,41'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:30:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":30,"green":30,"blue":34,"white":41}'
+
+- id: 'nano_ramp_up_0835'
+  alias: 'Nano — Ramp Up 08:35 (79%)'
+  description: 'RGBW 32,32,36,44'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:35:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":32,"green":32,"blue":36,"white":44}'
+
+- id: 'nano_ramp_up_0840'
+  alias: 'Nano — Ramp Up 08:40 (83%)'
+  description: 'RGBW 33,33,38,46'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:40:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":33,"green":33,"blue":38,"white":46}'
+
+- id: 'nano_ramp_up_0845'
+  alias: 'Nano — Ramp Up 08:45 (88%)'
+  description: 'RGBW 35,35,39,48'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:45:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":35,"green":35,"blue":39,"white":48}'
+
+- id: 'nano_ramp_up_0850'
+  alias: 'Nano — Ramp Up 08:50 (92%)'
+  description: 'RGBW 37,37,41,50'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:50:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":37,"green":37,"blue":41,"white":50}'
+
+- id: 'nano_ramp_up_0855'
+  alias: 'Nano — Ramp Up 08:55 (96%)'
+  description: 'RGBW 38,38,43,53'
+  mode: single
+  trigger:
+    - platform: time
+      at: '08:55:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":38,"green":38,"blue":43,"white":53}'
+
+- id: 'nano_ramp_up_0900'
+  alias: 'Nano — Ramp Up 09:00 (100%)'
+  description: 'RGBW 40,40,45,55'
+  mode: single
+  trigger:
+    - platform: time
+      at: '09:00:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":40,"green":40,"blue":45,"white":55}'
+
+- id: 'nano_ramp_down_1800'
+  alias: 'Nano — Ramp Down 18:00 (100%)'
+  description: 'RGBW 40,40,45,55'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:00:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":40,"green":40,"blue":45,"white":55}'
+
+- id: 'nano_ramp_down_1805'
+  alias: 'Nano — Ramp Down 18:05 (96%)'
+  description: 'RGBW 38,38,43,53'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:05:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":38,"green":38,"blue":43,"white":53}'
+
+- id: 'nano_ramp_down_1810'
+  alias: 'Nano — Ramp Down 18:10 (92%)'
+  description: 'RGBW 37,37,41,50'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:10:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":37,"green":37,"blue":41,"white":50}'
+
+- id: 'nano_ramp_down_1815'
+  alias: 'Nano — Ramp Down 18:15 (88%)'
+  description: 'RGBW 35,35,39,48'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:15:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":35,"green":35,"blue":39,"white":48}'
+
+- id: 'nano_ramp_down_1820'
+  alias: 'Nano — Ramp Down 18:20 (83%)'
+  description: 'RGBW 33,33,38,46'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:20:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":33,"green":33,"blue":38,"white":46}'
+
+- id: 'nano_ramp_down_1825'
+  alias: 'Nano — Ramp Down 18:25 (79%)'
+  description: 'RGBW 32,32,36,44'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:25:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":32,"green":32,"blue":36,"white":44}'
+
+- id: 'nano_ramp_down_1830'
+  alias: 'Nano — Ramp Down 18:30 (75%)'
+  description: 'RGBW 30,30,34,41'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:30:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":30,"green":30,"blue":34,"white":41}'
+
+- id: 'nano_ramp_down_1835'
+  alias: 'Nano — Ramp Down 18:35 (71%)'
+  description: 'RGBW 28,28,32,39'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:35:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":28,"green":28,"blue":32,"white":39}'
+
+- id: 'nano_ramp_down_1840'
+  alias: 'Nano — Ramp Down 18:40 (67%)'
+  description: 'RGBW 27,27,30,37'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:40:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":27,"green":27,"blue":30,"white":37}'
+
+- id: 'nano_ramp_down_1845'
+  alias: 'Nano — Ramp Down 18:45 (63%)'
+  description: 'RGBW 25,25,28,34'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:45:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":25,"green":25,"blue":28,"white":34}'
+
+- id: 'nano_ramp_down_1850'
+  alias: 'Nano — Ramp Down 18:50 (58%)'
+  description: 'RGBW 23,23,26,32'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:50:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":23,"green":23,"blue":26,"white":32}'
+
+- id: 'nano_ramp_down_1855'
+  alias: 'Nano — Ramp Down 18:55 (54%)'
+  description: 'RGBW 22,22,24,30'
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:55:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":22,"green":22,"blue":24,"white":30}'
+
+- id: 'nano_ramp_down_1900'
+  alias: 'Nano — Ramp Down 19:00 (50%)'
+  description: 'RGBW 20,20,23,28'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:00:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":20,"green":20,"blue":23,"white":28}'
+
+- id: 'nano_ramp_down_1905'
+  alias: 'Nano — Ramp Down 19:05 (46%)'
+  description: 'RGBW 18,18,21,25'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:05:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":18,"green":18,"blue":21,"white":25}'
+
+- id: 'nano_ramp_down_1910'
+  alias: 'Nano — Ramp Down 19:10 (42%)'
+  description: 'RGBW 17,17,19,23'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:10:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":17,"green":17,"blue":19,"white":23}'
+
+- id: 'nano_ramp_down_1915'
+  alias: 'Nano — Ramp Down 19:15 (38%)'
+  description: 'RGBW 15,15,17,21'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:15:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":15,"green":15,"blue":17,"white":21}'
+
+- id: 'nano_ramp_down_1920'
+  alias: 'Nano — Ramp Down 19:20 (33%)'
+  description: 'RGBW 13,13,15,18'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:20:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":13,"green":13,"blue":15,"white":18}'
+
+- id: 'nano_ramp_down_1925'
+  alias: 'Nano — Ramp Down 19:25 (29%)'
+  description: 'RGBW 12,12,13,16'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:25:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":12,"green":12,"blue":13,"white":16}'
+
+- id: 'nano_ramp_down_1930'
+  alias: 'Nano — Ramp Down 19:30 (25%)'
+  description: 'RGBW 10,10,11,14'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:30:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":10,"green":10,"blue":11,"white":14}'
+
+- id: 'nano_ramp_down_1935'
+  alias: 'Nano — Ramp Down 19:35 (21%)'
+  description: 'RGBW 8,8,9,11'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:35:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":8,"green":8,"blue":9,"white":11}'
+
+- id: 'nano_ramp_down_1940'
+  alias: 'Nano — Ramp Down 19:40 (17%)'
+  description: 'RGBW 7,7,7,9'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:40:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":7,"green":7,"blue":7,"white":9}'
+
+- id: 'nano_ramp_down_1945'
+  alias: 'Nano — Ramp Down 19:45 (13%)'
+  description: 'RGBW 5,5,6,7'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:45:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":5,"green":5,"blue":6,"white":7}'
+
+- id: 'nano_ramp_down_1950'
+  alias: 'Nano — Ramp Down 19:50 (8%)'
+  description: 'RGBW 3,3,4,5'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:50:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":3,"green":3,"blue":4,"white":5}'
+
+- id: 'nano_ramp_down_1955'
+  alias: 'Nano — Ramp Down 19:55 (4%)'
+  description: 'RGBW 2,2,2,2'
+  mode: single
+  trigger:
+    - platform: time
+      at: '19:55:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"ON","red":2,"green":2,"blue":2,"white":2}'
+
+- id: 'nano_ramp_down_2000'
+  alias: 'Nano — Ramp Down 20:00 (0%)'
+  description: 'RGBW off'
+  mode: single
+  trigger:
+    - platform: time
+      at: '20:00:00'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: chihiros/nano/light/set
+        payload: '{"state":"OFF"}'

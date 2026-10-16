@@ -21,9 +21,7 @@ HA_URL     = os.environ.get('HA_URL',     'http://localhost:8123')
 HA_TOKEN   = os.environ.get('HA_TOKEN',   '')
 MQTT_HOST  = os.environ.get('MQTT_HOST',  'localhost')
 MQTT_PORT  = int(os.environ.get('MQTT_PORT', 1883))
-MQTT_TOPIC      = os.environ.get('MQTT_TOPIC',      'chihiros/light/set')
 MQTT_TOPIC_NANO = os.environ.get('MQTT_TOPIC_NANO', 'chihiros/nano/light/set')
-SPOT_ENTITY     = os.environ.get('SPOT_ENTITY',     'light.aquarium_spotlight')
 PRESETS_DIR     = os.environ.get('PRESETS_DIR',     os.path.join(os.path.dirname(__file__), 'presets'))
 
 # Full path to the automations file. Defaults to <HA_CONFIG>/automations.yaml,
@@ -397,25 +395,6 @@ def delete_preset(name: str):
 
 # ── Device test ────────────────────────────────────────────────────────────────
 
-@app.route('/api/test/wrgb', methods=['POST'])
-def test_wrgb():
-    data  = request.get_json(force=True)
-    state = data.get('state', 'ON').upper()
-    if state == 'ON':
-        payload = json.dumps({
-            'state': 'ON',
-            'red':   int(data.get('r', 50)),
-            'green': int(data.get('g', 50)),
-            'blue':  int(data.get('b', 50)),
-            'white': int(data.get('w', 50)),
-        })
-    else:
-        payload = json.dumps({'state': 'OFF'})
-
-    result = _mqtt_publish(MQTT_TOPIC, payload)
-    return jsonify(result)
-
-
 @app.route('/api/test/nano', methods=['POST'])
 def test_nano():
     data  = request.get_json(force=True)
@@ -435,29 +414,10 @@ def test_nano():
     return jsonify(result)
 
 
-@app.route('/api/test/spotlight', methods=['POST'])
-def test_spotlight():
-    data  = request.get_json(force=True)
-    state = data.get('state', 'ON').upper()
-
-    if state == 'ON':
-        brightness = int(data.get('brightness', 70))
-        result = _ha_call('POST', '/api/services/light/turn_on', {
-            'entity_id': SPOT_ENTITY,
-            'brightness_pct': brightness,
-        })
-    else:
-        result = _ha_call('POST', '/api/services/light/turn_off', {
-            'entity_id': SPOT_ENTITY,
-        })
-
-    return jsonify(result)
-
-
 @app.route('/api/test/light', methods=['POST'])
 def test_light():
     """
-    Generic HA light service caller. Used by the WRGB four-entity test path.
+    Generic HA light service caller. Used by the four-entity WRGB and spotlight tests.
     Body: { entity_id: str, state: 'ON'|'OFF', brightness_pct?: int }
     """
     data      = request.get_json(force=True)

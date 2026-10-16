@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import type { NanoScheduleState, RampLight, LightConfig } from '../types'
-import { sendRampTest } from '../testLight'
+import type { RampScheduleState, Light, LightConfig } from '../types'
+import { sendRampTest, callTestLight } from '../testLight'
 import { createLiveSender, type LivePhase } from '../liveSender'
-import s from './NanoDeviceTest.module.css'
+import s from './RampDeviceTest.module.css'
 
 interface Props {
-  light: RampLight
-  schedule: NanoScheduleState
+  light: Light
+  schedule: RampScheduleState
 }
 
 type Status = 'idle' | 'busy' | 'ok' | 'error'
-type Rgbw = NanoScheduleState['peakRgbw']
+type Rgbw = RampScheduleState['peakRgbw']
 
 const FLASH_MS = 3000
 // Wait for a slider to settle before commanding the lamp. Chihiros lamps sit
@@ -39,7 +39,7 @@ const PHASE_TEXT: Record<LivePhase, string> = {
   error:   'send failed',
 }
 
-export default function NanoDeviceTest({ light, schedule }: Props) {
+export default function RampDeviceTest({ light, schedule }: Props) {
   const [status, setStatus]   = useState<Status>('idle')
   const [message, setMessage] = useState('')
   const [live, setLive]       = useState(false)
@@ -168,6 +168,50 @@ export default function NanoDeviceTest({ light, schedule }: Props) {
         {status === 'ok'   && <div className={`${s.status} ${s.statusOk}`}>✓ {message}</div>}
         {status === 'error'&& <div className={`${s.status} ${s.statusError}`}>✗ {message}</div>}
       </div>
+
+      {light.spotlight && (
+        <SpotlightTest entityId={light.spotlight.entityId} brightness={schedule.spotlightBrightness ?? 100} />
+      )}
+    </div>
+  )
+}
+
+function SpotlightTest({ entityId, brightness }: { entityId: string; brightness: number }) {
+  const [status, setStatus]   = useState<Status>('idle')
+  const [message, setMessage] = useState('')
+
+  async function send(on: boolean) {
+    setStatus('busy')
+    try {
+      const res = await callTestLight(entityId, on ? 'ON' : 'OFF', on ? brightness : undefined)
+      setStatus(res.ok ? 'ok' : 'error')
+      setMessage(res.ok ? (on ? `Spotlight on at ${brightness}%` : 'Spotlight off') : res.error ?? 'Unknown error')
+    } catch (e: unknown) {
+      setStatus('error')
+      setMessage(String(e))
+    }
+  }
+
+  function flash() {
+    send(true)
+    setTimeout(() => send(false), FLASH_MS)
+  }
+
+  return (
+    <div className={s.device}>
+      <div className={s.deviceHeader}>
+        <span className={s.deviceLabel}>Spotlight</span>
+        <span className={s.deviceMeta}>HA API · {brightness}%</span>
+      </div>
+      <div className={s.btnRow}>
+        <button className={`${s.btn} ${s.btnOn}`}    onClick={() => send(true)}  disabled={status === 'busy'}>On</button>
+        <button className={`${s.btn} ${s.btnOff}`}   onClick={() => send(false)} disabled={status === 'busy'}>Off</button>
+        <button className={`${s.btn} ${s.btnFlash}`} onClick={flash}             disabled={status === 'busy'}
+          title={`On for ${FLASH_MS / 1000}s then off`}>Flash</button>
+      </div>
+      {status === 'busy' && <div className={`${s.status} ${s.statusBusy}`}>sending…</div>}
+      {status === 'ok'   && <div className={`${s.status} ${s.statusOk}`}>✓ {message}</div>}
+      {status === 'error'&& <div className={`${s.status} ${s.statusError}`}>✗ {message}</div>}
     </div>
   )
 }

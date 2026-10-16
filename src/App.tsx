@@ -1,41 +1,36 @@
 import { useEffect, useState } from 'react'
-import type { ScheduleState, NanoScheduleState, Light, SiestaLight, RampLight } from './types'
-import Timeline from './components/Timeline'
-import CycleControls from './components/CycleControls'
-import ChannelEditor from './components/ChannelEditor'
-import PhotoperiodDisplay from './components/PhotoperiodDisplay'
+import type { RampScheduleState, Light } from './types'
 import ParDliEstimator from './components/ParDliEstimator'
 import YamlPanel from './components/YamlPanel'
-import DeviceTest from './components/DeviceTest'
-import NanoEditor from './components/NanoEditor'
-import NanoDeviceTest from './components/NanoDeviceTest'
+import RampEditor from './components/RampEditor'
+import RampDeviceTest from './components/RampDeviceTest'
 import Presets from './components/Presets'
 import { LIGHTS } from './lights'
 import { loadStored, saveStored } from './utils/lightStorage'
-import { generateLightYaml } from './utils/generateYaml'
-import { solidProblems } from './utils/solid'
+import { normalizeState } from './utils/normalizeState'
+import { generateRampYaml } from './utils/generateYaml'
+import { rampProblems } from './utils/ramp'
 import './App.css'
 
 type HydrateSource = 'local' | 'ha' | 'offline'
-type AnyState = ScheduleState | NanoScheduleState
 
-/** Defaults from the registry, overlaid with whatever this browser has saved. */
-function initialState(light: Light): AnyState {
-  const saved = loadStored(light)
-  return { ...light.defaults, ...(saved ?? {}) } as AnyState
+/** This browser's saved schedule, or the registry defaults. */
+function initialState(light: Light): RampScheduleState {
+  return loadStored(light) ?? light.defaults
 }
 
 export default function App() {
   const [activeId, setActiveId] = useState<string>(LIGHTS[0].id)
 
-  const [states, setStates] = useState<Record<string, AnyState>>(() =>
+  const [states, setStates] = useState<Record<string, RampScheduleState>>(() =>
     Object.fromEntries(LIGHTS.map(l => [l.id, initialState(l)])),
   )
   const [sources, setSources] = useState<Record<string, HydrateSource>>(() =>
     Object.fromEntries(LIGHTS.map(l => [l.id, 'local' as HydrateSource])),
   )
 
-  // On mount, hydrate each light from the snapshot HA's automations.yaml carries.
+  // On mount, hydrate each light from the snapshot its last deploy left in
+  // HA's automations.yaml. A snapshot that doesn't fit (siesta) is ignored.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -53,12 +48,13 @@ export default function App() {
         return
       }
 
-      const nextStates: Record<string, AnyState> = {}
+      const nextStates: Record<string, RampScheduleState> = {}
       const nextSources: Record<string, HydrateSource> = {}
       LIGHTS.forEach((light, i) => {
         const res = results[i]
-        if (res?.exists && res.state) {
-          nextStates[light.id]  = { ...light.defaults, ...(res.state as object) } as AnyState
+        const deployed = res?.exists ? normalizeState(light, res.state) : null
+        if (deployed) {
+          nextStates[light.id]  = deployed
           nextSources[light.id] = 'ha'
         } else if (res === null) {
           nextSources[light.id] = 'offline'
@@ -72,15 +68,18 @@ export default function App() {
 
   const active = LIGHTS.find(l => l.id === activeId) ?? LIGHTS[0]
 
-  function update(light: Light, next: AnyState, persist = false) {
+  function update(light: Light, next: RampScheduleState) {
     setStates(s => ({ ...s, [light.id]: next }))
-    if (persist) saveStored(light, next as unknown as Record<string, unknown>)
+    saveStored(light, next)
   }
 
-  function handleLoadPreset(light: Light, loaded: Record<string, unknown>) {
-    const next = { ...light.defaults, ...loaded } as AnyState
-    update(light, next, light.scheduleKind === 'ramp')
+  /** Returns an error message when the preset doesn't fit this light. */
+  function handleLoadPreset(light: Light, loaded: unknown): string | null {
+    const next = normalizeState(light, loaded)
+    if (!next) return 'Not loaded: this preset is not a ramp schedule (siesta presets cannot be converted).'
+    update(light, next)
     setSources(s => ({ ...s, [light.id]: 'local' }))
+    return null
   }
 
   return (
@@ -118,80 +117,43 @@ export default function App() {
           />
         </section>
 
-        {active.scheduleKind === 'siesta'
-          ? <SiestaPanels
-              light={active as SiestaLight}
-              schedule={states[active.id] as ScheduleState}
-              onChange={next => update(active, next)}
-            />
-          : <RampPanels
-              light={active as RampLight}
-              schedule={states[active.id] as NanoScheduleState}
-              onChange={next => update(active, next, true)}
-            />}
+        <LightPanels
+          key={active.id}
+          light={active}
+          schedule={states[active.id]}
+          onChange={next => update(active, next)}
+        />
       </main>
     </div>
   )
 }
 
-function SiestaPanels({ light, schedule, onChange }: {
-  light: SiestaLight
-  schedule: ScheduleState
-  onChange: (s: ScheduleState) => void
+function LightPanels({ light, schedule, onChange }: {
+  light: Light
+  schedule: RampScheduleState
+  onChange: (s: RampScheduleState) => void
 }) {
   return (
     <>
-      <section className="section timeline-section">
-        <Timeline schedule={schedule} onChange={onChange} />
-      </section>
-
-      <section className="section two-col">
-        <div className="col-left">
-          <CycleControls light={light} schedule={schedule} onChange={onChange} />
-          <div className="spacer" />
-          <ChannelEditor light={light} schedule={schedule} onChange={onChange} />
-        </div>
-        <div className="col-right">
-          <PhotoperiodDisplay schedule={schedule} />
+      <section className="section two-col" style={{ alignItems: 'start' }}>
+        <RampEditor light={light} schedule={schedule} onChange={onChange} />
+        <div>
+          <RampDeviceTest light={light} schedule={schedule} />
           {light.dli && (
             <>
               <div className="spacer" />
-              <ParDliEstimator schedule={schedule} onChange={onChange} />
+              <ParDliEstimator light={light} dli={light.dli} schedule={schedule} />
             </>
           )}
         </div>
       </section>
 
-      <section className="section two-col" style={{ alignItems: 'start' }}>
-        <YamlPanel
-          yaml={generateLightYaml(light, schedule)}
-          prefix={light.prefix}
-          state={schedule}
-          blockers={solidProblems(schedule)}
-        />
-        <DeviceTest light={light} schedule={schedule} />
-      </section>
-    </>
-  )
-}
-
-function RampPanels({ light, schedule, onChange }: {
-  light: RampLight
-  schedule: NanoScheduleState
-  onChange: (s: NanoScheduleState) => void
-}) {
-  return (
-    <>
-      <section className="section two-col" style={{ alignItems: 'start' }}>
-        <NanoEditor light={light} schedule={schedule} onChange={onChange} />
-        <NanoDeviceTest key={light.id} light={light} schedule={schedule} />
-      </section>
-
       <section className="section">
         <YamlPanel
-          yaml={generateLightYaml(light, schedule)}
+          yaml={generateRampYaml(schedule, light)}
           prefix={light.prefix}
           state={schedule}
+          blockers={rampProblems(light, schedule)}
         />
       </section>
     </>

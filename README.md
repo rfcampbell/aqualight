@@ -7,7 +7,7 @@ Visual editor for Chihiros aquarium light schedules, generating Home Assistant
 
 Every light is one entry in a registry rather than a hardcoded branch:
 
-- `src/lights.ts` — the full typed registry (transport, schedule kind, header
+- `src/lights.ts` — the full typed registry (transport, spotlight, header
   strings, storage key, DLI, defaults). This is the file to edit.
 - `backend/lights.json` — only the identity the backend also needs (`id`,
   `prefix`, `presetId`). `KNOWN_PREFIXES` and the valid preset devices derive
@@ -17,21 +17,37 @@ Every light is one entry in a registry rather than a hardcoded branch:
 `prefix` is what the merge keys on: a deploy replaces exactly the entries whose
 id starts with the owning light's prefix and leaves every other entry alone.
 
-`scheduleKind` selects the state shape, the editor and the generator:
+Every light uses one schedule shape, `RampScheduleState` (`src/types.ts`):
+ramp up from `rampUpStart` to a held peak (`peakStart`–`peakEnd`, levels
+`peakRgbw`), ramp down to off at `rampDownEnd`, in `stepMinutes` steps. One
+editor (`RampEditor`), one generator (`generateRampYaml`). Step *i* of *n*
+lands at `rampUpStart + i·step`, so the light reaches peak at `peakStart` and
+is off at `rampDownEnd`. Nano and display output is held byte-for-byte against
+YAML frozen before spotlight support (`src/utils/__tests__/golden/ramp-*`).
 
-| kind | shape | editor | generator |
-|------|-------|--------|-----------|
-| `siesta` | `ScheduleState` — cycling WRGB with optional spotlight fill | Timeline + CycleControls + ChannelEditor | `generateYaml` |
-| `ramp` | `NanoScheduleState` — one peak with sunrise/sunset ramps | NanoEditor | `generateNanoYaml` |
+A light with `spotlight` in the registry (only the 100P) also carries
+`spotlightBrightness` (brightness_pct), `spotlightLeadMinutes` and
+`spotlightTailMinutes`: the spotlight is on from lead-before-ramp-up to
+`peakStart`, and from `peakEnd` to tail-after-ramp-down. Deploy is refused
+while the waypoints are out of order or a spotlight window crosses midnight
+(`rampProblems` in `src/utils/ramp.ts`).
 
-A `siesta`-kind light with `solidDefaults` (the 100P) also offers a **solid**
-mode, chosen by `ScheduleState.mode` (absent = siesta): sunrise ramp, WRGB held
-from core start until the sunset ramp, and the spotlight on only for
-`spotlightLeadMinutes` before sunrise → core start and sunset start →
-`spotlightTailMinutes` after sunset. Lights-off moves to the end of that tail.
-Deploy is refused while the ramps overlap the core (`solidProblems` in
-`src/utils/solid.ts`). Siesta output is held byte-for-byte against YAML frozen
-before solid mode existed (`src/utils/__tests__/golden/`).
+The 100P ran a siesta cycle, then briefly a "solid" mode; both are gone.
+`normalizeState` converts a solid-mode snapshot or preset to the ramp shape
+and rejects siesta ones. `parity.test.ts` checks the converted 100P against
+the automations HA was running on 2026-10-16: identical spotlight, WRGB
+ramps one 3-min step later.
+
+### Saved state
+
+- **Browser:** every edit saves the whole schedule under the light's
+  `storage.key`. Stored state that doesn't fit is removed on load.
+- **HA:** each deploy embeds the schedule as a `# AQUALIGHT_STATE:<prefix>=`
+  line in automations.yaml. On open the editor loads that snapshot when it
+  exists and fits, otherwise the browser's copy, otherwise registry defaults.
+  So undeployed edits are replaced by the deployed schedule on reload once a
+  snapshot exists; the Presets bar says which source is showing.
+- **PPFD** for the DLI estimate is registry data (`dli`), not editable state.
 
 `transport` selects the command emitter, shared across lights rather than
 duplicated per light: `light_entities` (four HA entities, `brightness_pct`),

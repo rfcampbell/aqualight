@@ -1,26 +1,24 @@
-import type { Light } from '../types'
+import type { Light, RampScheduleState } from '../types'
+import { normalizeState } from './normalizeState'
 
 /**
- * Per-light browser storage. The key and the set of persisted fields are
- * registry fields, so each light keeps its own legacy key and its own legacy
- * notion of what "defaults" means — biotope has only ever stored channel
- * levels and spotlight brightness under aqualight_defaults, while nano stores
- * its whole state under aqualight_nano.
+ * Per-light browser storage: the whole schedule under the light's key.
+ * Stored state that no longer fits (the 100P's old two-field defaults,
+ * siesta) loads as null and is removed, so it cannot come back.
  */
 
-export function loadStored(light: Light): Record<string, unknown> | null {
+export function loadStored(light: Light): RampScheduleState | null {
   try {
     const raw = localStorage.getItem(light.storage.key)
-    return raw ? JSON.parse(raw) as Record<string, unknown> : null
+    if (!raw) return null
+    const state = normalizeState(light, JSON.parse(raw))
+    if (!state) localStorage.removeItem(light.storage.key)
+    return state
   } catch { return null }
 }
 
-export function saveStored(light: Light, state: Record<string, unknown>): void {
-  const { fields } = light.storage
-  const payload = fields
-    ? Object.fromEntries(fields.filter(f => f in state).map(f => [f, state[f]]))
-    : state
+export function saveStored(light: Light, state: RampScheduleState): void {
   try {
-    localStorage.setItem(light.storage.key, JSON.stringify(payload))
+    localStorage.setItem(light.storage.key, JSON.stringify(state))
   } catch { /* private mode or quota — nothing to recover, HA holds the real state */ }
 }

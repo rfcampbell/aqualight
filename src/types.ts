@@ -5,66 +5,21 @@ export interface RgbwChannels {
   w: number
 }
 
-export interface RampConfig {
-  startMinute: number
-  durationMinutes: number
-  steps: number
-}
-
-export interface CyclePattern {
-  wrgbDuration: number      // minutes (default 40)
-  spotlightDuration: number // minutes (default 20)
-  overlapMinutes: number    // overlap on each transition (default 2)
-  cycleStart: number        // minute of day (default 360 = 6:00)
-  cycleEnd: number          // minute of day (default 1020 = 17:00)
-}
-
 /**
- * siesta: WRGB cycles on/off with spotlight fill between.
- * solid:  one continuous WRGB photoperiod; the spotlight only brackets the ramps.
- * Absent means siesta, so state saved before solid mode existed loads unchanged.
+ * One photoperiod: ramp up to a held peak, ramp down to off. Every light uses
+ * this shape. The spotlight fields are present exactly when the light's
+ * registry entry has a spotlight.
  */
-export type ScheduleMode = 'siesta' | 'solid'
-
-export interface ScheduleState {
-  mode?: ScheduleMode
-  sunrise: RampConfig
-  sunset: RampConfig
-  cycle: CyclePattern
-  wrgbChannels: RgbwChannels   // RGBW levels during on-phase (0-100 per channel)
-  spotlightBrightness: number  // 0-255
-  ppfdWrgb: number             // µmol/m²/s
-  ppfdSpotlight: number        // µmol/m²/s
-  spotlightLeadMinutes?: number  // solid: spotlight on this long before sunrise (default 15)
-  spotlightTailMinutes?: number  // solid: spotlight off this long after sunset ends (default 15)
-}
-
-/** What switching a light into solid mode seeds. */
-export interface SolidDefaults {
-  sunrise: RampConfig
-  sunset: RampConfig
-  cycleStart: number
-  cycleEnd: number
-  wrgbChannels: RgbwChannels
-  spotlightLeadMinutes: number
-  spotlightTailMinutes: number
-}
-
-export interface NanoScheduleState {
+export interface RampScheduleState {
   rampUpStart: number    // minute of day
   peakStart: number      // minute of day
   peakEnd: number        // minute of day
   rampDownEnd: number    // minute of day
-  peakRgbw: RgbwChannels
-  stepMinutes: number    // interpolation interval (default 5)
-}
-
-export interface TimeBlock {
-  id: string
-  type: 'wrgb' | 'spotlight' | 'sunrise' | 'sunset' | 'overlap'
-  startMinute: number
-  endMinute: number
-  color: string
+  peakRgbw: RgbwChannels // 0-100 per channel
+  stepMinutes: number    // interpolation interval
+  spotlightBrightness?: number   // brightness_pct, 1-100
+  spotlightLeadMinutes?: number  // on this long before rampUpStart, off at peakStart
+  spotlightTailMinutes?: number  // on at peakEnd, off this long after rampDownEnd
 }
 
 
@@ -88,9 +43,6 @@ export type LightConfig =
       entityIds: { red: string; green: string; blue: string; white: string }
     }
 
-/** Which schedule shape, editor and generator a light uses. */
-export type ScheduleKind = 'siesta' | 'ramp'
-
 export interface DliParams {
   ppfdWrgb: number
   ppfdSpotlight: number
@@ -98,7 +50,7 @@ export interface DliParams {
   todo?: string
 }
 
-interface LightBase {
+export interface Light {
   id: string
   /** Owns every automation id starting with this. Drives the backend merge. */
   prefix: string
@@ -106,17 +58,19 @@ interface LightBase {
   presetId: string
   label: string
   sublabel?: string
-  /** Alias stem: 'Aquarium' produces "Aquarium — Cycle 1 WRGB On". */
+  /** Alias stem: 'Nano' produces "Nano — Ramp Up 07:05 (4%)". */
   aliasPrefix: string
   transport: LightConfig
+  /** A second lamp that brackets the ramps. Its levels live in the schedule. */
+  spotlight?: { entityId: string }
   /**
    * Header text, stored verbatim rather than templated: these strings differ
    * between lights in ways a template would not reproduce byte-for-byte.
    * `lampLabel` includes its own padding, so `# ${lampLabel}: ...` aligns.
    */
   header: { title: string; lampLabel: string }
-  /** localStorage key, plus which fields to persist (all of them if absent). */
-  storage: { key: string; fields?: string[] }
+  /** localStorage key. The whole schedule is stored under it. */
+  storage: { key: string }
   /** Endpoint for the live device test, when the transport needs a dedicated one. */
   mqttTestEndpoint?: string
   /**
@@ -125,25 +79,7 @@ interface LightBase {
    * not exist, and the failure would be silent in HA.
    */
   placeholder?: boolean
-  /**
-   * PAR/DLI parameters. Optional: a light can be in the registry before its
-   * output has been measured. Only siesta lights currently surface an
-   * estimator in the UI, because NanoScheduleState carries no ppfd fields.
-   */
+  /** PAR/DLI parameters. Optional: a light can be in the registry before its output is measured. */
   dli?: DliParams
+  defaults: RampScheduleState
 }
-
-export interface SiestaLight extends LightBase {
-  scheduleKind: 'siesta'
-  defaults: ScheduleState
-  /** Present on lights that can run a solid photoperiod instead of siesta. */
-  solidDefaults?: SolidDefaults
-  spotlight?: { entityId: string }
-}
-
-export interface RampLight extends LightBase {
-  scheduleKind: 'ramp'
-  defaults: NanoScheduleState
-}
-
-export type Light = SiestaLight | RampLight

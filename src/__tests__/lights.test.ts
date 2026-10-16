@@ -41,10 +41,24 @@ describe('light registry', () => {
     for (const l of LIGHTS) expect(l.prefix.endsWith('_')).toBe(true)
   })
 
-  it('gives a spotlight only to siesta lights', () => {
+  it('gives a spotlight to the 100P only, with its levels in the schedule', () => {
     for (const l of LIGHTS) {
-      if (l.scheduleKind === 'ramp') expect('spotlight' in l).toBe(false)
+      const has = l.id === 'biotope'
+      expect('spotlight' in l).toBe(has)
+      for (const f of ['spotlightBrightness', 'spotlightLeadMinutes', 'spotlightTailMinutes'] as const)
+        expect(f in l.defaults).toBe(has)
     }
+  })
+
+  it('has the 100P on the ramp shape with its solid-day times', () => {
+    const b = lightById('biotope')!
+    expect(b.defaults).toEqual({
+      rampUpStart: 345, peakStart: 375, peakEnd: 795, rampDownEnd: 825,
+      peakRgbw: { r: 60, g: 60, b: 60, w: 60 }, stepMinutes: 3,
+      spotlightBrightness: 30, spotlightLeadMinutes: 15, spotlightTailMinutes: 15,
+    })
+    expect(b.dli).toEqual({ ppfdWrgb: 57, ppfdSpotlight: 1 })
+    expect(b.transport.kind).toBe('light_entities')
   })
 
   it('marks placeholder DLI values as TODO so they cannot pass for measured', () => {
@@ -71,9 +85,8 @@ describe('light registry', () => {
     for (const l of SHARED_LIGHTS) expect(l.placeholder).toBeUndefined()
   })
 
-  it('has the display light on the nano ramp shape with no spotlight', () => {
+  it('has the display light with no spotlight', () => {
     const d = lightById('display')!
-    expect(d.scheduleKind).toBe('ramp')
     expect(d.prefix).toBe('display_')
     expect('spotlight' in d).toBe(false)
     expect(d.transport.kind).toBe('light_entities')

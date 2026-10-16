@@ -1,4 +1,4 @@
-import type { RampLight } from './types'
+import type { Light } from './types'
 
 /** POST to the backend's generic HA light caller. brightness_pct 0 turns the entity off. */
 export async function callTestLight(entityId: string, state: 'ON' | 'OFF', brightnessPct?: number) {
@@ -15,7 +15,7 @@ type Rgbw = { r: number; g: number; b: number; w: number }
 
 /** Send a ramp light's device test over whatever transport it actually uses. */
 export async function sendRampTest(
-  light: RampLight, rgbw: Rgbw, on: boolean,
+  light: Light, rgbw: Rgbw, on: boolean,
   prev?: Rgbw,   // what the lamp already shows; per-channel lights then skip unchanged channels
 ): Promise<Result> {
   const { r, g, b, w } = rgbw
