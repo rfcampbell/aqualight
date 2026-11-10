@@ -33,6 +33,7 @@ PORT=5175
 EOF
     echo "  Created /var/www/aqualight/.env — add your HA_TOKEN!"
   fi
+  chmod 600 /var/www/aqualight/.env  # holds the HA token
 
   # sudoers rule: allow writing automations.yaml without password
   echo 'rcampbell ALL=(ALL) NOPASSWD: /usr/bin/cat, /usr/bin/cp, /usr/bin/tee, /usr/bin/rm' \
