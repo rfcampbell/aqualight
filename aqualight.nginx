@@ -1,5 +1,7 @@
 server {
     listen 80;
+    listen 443 ssl;
+    include snippets/robix-tls.conf;
     server_name aqualight.robix;
 
     location / {
